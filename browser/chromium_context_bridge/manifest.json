@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "GhostType Context Bridge",
+  "version": "0.1.0",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA4NYg+e0qqIsKCiHS5Q88sBF4xAP13axmeyOe6cZ/VIEhRhPY8hVg8wLt16CEtIyG0rDxhb8plAwNnh1zHaLl2GJI+N9o84DZlRfuJf8sGYunFviDMEzWsJB5v0/Bc2LFv5WERf6X8rJ9q0hm23mE4TSLHDBVWjheT3QiZ+IA9A89MGvqW1npWyKUnX8NemaEZ0Pvu962PwsIsBDxNwDnyYTHJw3SPKhItGJLDrseRD/V5M2Mem+aTMOJUXW/dbWNs7/VcnEq9N4ti/ngJvHTgp5MND3cA0tNmlTF8thNIMj/ZL2nh94x3n7/MVCmkiT5rygsT8IL//gzSixDfV1ixQIDAQAB",
+  "description": "Push active tab domain to GhostType via Native Messaging.",
+  "permissions": [
+    "tabs",
+    "nativeMessaging",
+    "alarms"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "GhostType Context Bridge"
+  },
+  "commands": {
+    "push-context": {
+      "suggested_key": {
+        "default": "Alt+Shift+G",
+        "mac": "Alt+Shift+G"
+      },
+      "description": "Push active tab context to GhostType"
+    }
+  }
+}

@@ -1,0 +1,65 @@
+name: Bug Report
+description: Report a reproducible GhostType bug
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please fill out all required fields so maintainers can reproduce quickly.
+  - type: input
+    id: macos_version
+    attributes:
+      label: macOS version
+      placeholder: "macOS 15.1"
+    validations:
+      required: true
+  - type: dropdown
+    id: chip
+    attributes:
+      label: Chip
+      options:
+        - Apple Silicon (M1/M2/M3/M4)
+        - Intel
+    validations:
+      required: true
+  - type: textarea
+    id: install_path_checks
+    attributes:
+      label: Install path checks
+      description: Paste output from GhostType duplicate-instance checks
+      placeholder: |
+        find /Applications -maxdepth 2 -name "GhostType.app"
+        pgrep -laf "GhostType|Typeless"
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce_steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open ...
+        2. Press hotkey ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / screenshots
+      description: Include relevant app logs, console output, and screenshots
+    validations:
+      required: true

@@ -1,0 +1,54 @@
+# macOS / Finder
+.DS_Store
+
+# Xcode / Swift build artifacts
+DerivedData/
+.build/
+build/
+dist/
+*.xcresult
+*.ipa
+*.dSYM
+
+# Xcode generated project (regenerate via xcodegen)
+*.xcodeproj
+
+# Xcode user-specific files
+xcuserdata/
+UserInterfaceState.xcuserstate
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+
+# Swift Package Manager
+.swiftpm/
+Package.resolved
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Claude Code / agent local config
+.claude/
+.agent/
+
+# Environment / local secrets
+.env
+.env.*
+*.env.local
+config.local.json
+secrets/
+secrets.*
+*.secret
+
+# Signing / certificates / provisioning
+*.p12
+*.cer
+*.crt
+*.pem
+*.p8
+*.key
+*.mobileprovision
+*.provisionprofile

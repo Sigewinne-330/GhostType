@@ -1,0 +1,56 @@
+name: GhostType
+options:
+  createIntermediateGroups: true
+settings:
+  base:
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+targets:
+  GhostType:
+    type: application
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: macos
+      - path: different_prompt_typeless.md
+        buildPhase: resources
+      - path: python/service.py
+        buildPhase: resources
+      - path: python/enhancement_engine.py
+        buildPhase: resources
+      - path: python/audio_io.py
+        buildPhase: resources
+      - path: python/requirements.txt
+        buildPhase: resources
+      - path: python/install_webrtc_apm_macos.sh
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.codeandchill.ghosttype
+        PRODUCT_NAME: GhostType
+        SWIFT_VERSION: "5.9"
+        INFOPLIST_FILE: GhostType/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_ENTITLEMENTS: GhostType/GhostType.entitlements
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: ""
+        OTHER_CODE_SIGN_FLAGS: '-r "=designated => identifier \"com.codeandchill.ghosttype\""'
+        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: 1.0.0
+    scheme:
+      testTargets:
+        - GhostTypeTests
+
+  GhostTypeTests:
+    type: bundle.unit-test
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: tests
+    dependencies:
+      - target: GhostType
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.codeandchill.ghosttype.tests
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: ""

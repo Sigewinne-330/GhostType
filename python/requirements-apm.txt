@@ -1,0 +1,7 @@
+# Optional dependency set for M2 WebRTC APM path.
+# This package currently builds from source and needs toolchain support.
+# macOS bootstrap:
+#   brew install swig
+#   pip install -r requirements-apm.txt
+
+webrtc-audio-processing>=0.1.3
