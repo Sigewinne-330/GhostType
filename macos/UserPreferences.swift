@@ -177,7 +177,7 @@ final class UserPreferences: UserDefaultsBackedObject {
     @UserDefaultBacked(key: Keys.targetLanguage, defaultValue: .chinese)
     var targetLanguage: TargetLanguageOption
 
-    @UserDefaultBacked(key: Keys.outputLanguage, defaultValue: .english)
+    @UserDefaultBacked(key: Keys.outputLanguage, defaultValue: .auto)
     var outputLanguage: OutputLanguageOption
 
     @UserDefaultBacked(key: Keys.memoryTimeout, defaultValue: .fiveMinutes)
@@ -271,10 +271,17 @@ final class UserPreferences: UserDefaultsBackedObject {
         askShortcut = Self.loadShortcut(from: defaults, forKey: Keys.askShortcut, fallback: .defaultAsk)
         translateShortcut = Self.loadShortcut(from: defaults, forKey: Keys.translateShortcut, fallback: .defaultTranslate)
 
-        if defaults.string(forKey: Keys.outputLanguage) == nil {
-            let loadedUILanguage = UILanguageOption(rawValue: defaults.string(forKey: Keys.uiLanguage) ?? "") ?? .english
-            let fallback: OutputLanguageOption = loadedUILanguage == .chineseSimplified ? .chineseSimplified : .english
-            defaults.set(fallback.rawValue, forKey: Keys.outputLanguage)
+        // One-time migration: the old init logic used to force outputLanguage
+        // to match uiLanguage (e.g. Chinese UI → Chinese output), which locked
+        // users into a single output language.  Reset to .auto so the system
+        // follows ASR-detected language instead.
+        let migrationKey = "GhostType.outputLanguageAutoMigrationDone"
+        if !defaults.bool(forKey: migrationKey) {
+            let current = defaults.string(forKey: Keys.outputLanguage)
+            if current == nil || current == OutputLanguageOption.chineseSimplified.rawValue || current == OutputLanguageOption.english.rawValue {
+                defaults.set(OutputLanguageOption.auto.rawValue, forKey: Keys.outputLanguage)
+            }
+            defaults.set(true, forKey: migrationKey)
         }
     }
 
