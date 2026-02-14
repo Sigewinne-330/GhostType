@@ -157,7 +157,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     timer.invalidate()
                     return
                 }
-                if self.monitor.start(promptForAccessibility: false) {
+                if self.monitor.start(promptForAccessibility: false, silent: true) {
                     timer.invalidate()
                     self.hotkeyMonitorRetryTimer = nil
                     self.logger.log("Global hotkey monitor retry succeeded.")

@@ -85,12 +85,14 @@ final class GlobalHotkeyManager {
     }
 
     @discardableResult
-    func start(promptForAccessibility: Bool = true) -> Bool {
+    func start(promptForAccessibility: Bool = true, silent: Bool = false) -> Bool {
         guard !isRunning else { return true }
 
-        guard ensureAccessibilityTrust(prompt: promptForAccessibility) else {
+        guard ensureAccessibilityTrust(prompt: promptForAccessibility, silent: silent) else {
             lastStartError = .accessibilityNotTrusted
-            logger.error("Global hotkey start failed: Accessibility permission missing.")
+            if !silent {
+                logger.error("Global hotkey start failed: Accessibility permission missing.")
+            }
             return false
         }
 
@@ -543,7 +545,7 @@ final class GlobalHotkeyManager {
     }
 
     @MainActor
-    private func ensureAccessibilityTrust(prompt: Bool) -> Bool {
+    private func ensureAccessibilityTrust(prompt: Bool, silent: Bool = false) -> Bool {
         let isTrusted: Bool
         if prompt {
             let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
@@ -552,7 +554,7 @@ final class GlobalHotkeyManager {
             isTrusted = AXIsProcessTrusted()
         }
 
-        if !isTrusted {
+        if !isTrusted && !silent {
             print(AppState.shared.ui("警告：系统未授予辅助功能权限，全局监听将失效！", "Warning: Accessibility permission is missing. Global hotkeys will not work."))
             logger.error("Accessibility permission missing for global hotkeys.")
             appLogger.log("Accessibility permission missing for global hotkeys.", type: .error)

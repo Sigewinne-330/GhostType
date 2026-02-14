@@ -135,7 +135,7 @@ final class BackendManager {
                 return
             }
 
-            self.checkHealth(timeout: 20.0) { healthy in
+            self.checkHealth(timeout: 120.0) { healthy in
                 if healthy {
                     self.runningLaunchConfig = requestedConfig
                     self.postIdleTimeoutConfig(seconds: requestedConfig.idleTimeoutSeconds)
@@ -295,10 +295,39 @@ final class BackendManager {
 
     private func bootstrapEnvironment(context: BootstrapContext) throws {
         let venvDir = context.appSupportDir.appendingPathComponent(".venv")
-        if !FileManager.default.fileExists(atPath: context.venvPython.path) {
+
+        // Determine which Python to use for the venv.
+        let bestPython = findBestPython()
+        let pythonPath: String = bestPython?.path ?? "/usr/bin/python3"
+        if let bp = bestPython {
+            appLogger.log("Selected Python \(bp.version.0).\(bp.version.1) at \(bp.path) for backend venv.")
+        } else {
+            appLogger.log("No Python >= \(Self.minimumPythonVersion.major).\(Self.minimumPythonVersion.minor) found; falling back to /usr/bin/python3.", type: .warning)
+        }
+
+        // Check if existing venv needs recreation (e.g. was built with Python < 3.10).
+        var needsRecreate = !FileManager.default.fileExists(atPath: context.venvPython.path)
+        if !needsRecreate, let venvVer = venvPythonVersion(at: context.venvPython) {
+            if venvVer.0 < Self.minimumPythonVersion.major ||
+                (venvVer.0 == Self.minimumPythonVersion.major && venvVer.1 < Self.minimumPythonVersion.minor) {
+                if bestPython != nil {
+                    appLogger.log(
+                        "Existing venv uses Python \(venvVer.0).\(venvVer.1) (< \(Self.minimumPythonVersion.major).\(Self.minimumPythonVersion.minor)). Recreating with newer Python.",
+                        type: .warning
+                    )
+                    try? FileManager.default.removeItem(at: venvDir)
+                    // Also clear the requirements marker so dependencies get reinstalled.
+                    let marker = context.appSupportDir.appendingPathComponent(".requirements.sha256")
+                    try? FileManager.default.removeItem(at: marker)
+                    needsRecreate = true
+                }
+            }
+        }
+
+        if needsRecreate {
             let create = Process()
-            create.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-            create.arguments = ["python3", "-m", "venv", venvDir.path]
+            create.executableURL = URL(fileURLWithPath: pythonPath)
+            create.arguments = ["-m", "venv", venvDir.path]
             create.qualityOfService = .background
 
             let errPipe = Pipe()
@@ -472,6 +501,74 @@ final class BackendManager {
         } catch {
             return false
         }
+    }
+
+    /// Minimum Python version required by MLX and other dependencies.
+    private static let minimumPythonVersion = (major: 3, minor: 10)
+
+    /// Finds the best available `python3` executable that meets the minimum version.
+    /// Checks Homebrew installations first, then falls back to the system PATH `python3`.
+    private func findBestPython() -> (path: String, version: (Int, Int))? {
+        let candidates: [String] = [
+            "/opt/homebrew/bin/python3",      // Homebrew ARM
+            "/usr/local/bin/python3",         // Homebrew Intel
+        ]
+
+        // Also discover Homebrew-versioned Python binaries (e.g. python3.12, python3.11)
+        var versionedCandidates: [String] = []
+        for dir in ["/opt/homebrew/bin", "/usr/local/bin"] {
+            for minor in stride(from: 13, through: 10, by: -1) {
+                versionedCandidates.append("\(dir)/python3.\(minor)")
+            }
+        }
+
+        let allCandidates = candidates + versionedCandidates + ["/usr/bin/python3"]
+
+        var best: (path: String, version: (Int, Int))?
+        for path in allCandidates {
+            guard FileManager.default.isExecutableFile(atPath: path) else { continue }
+            guard let ver = pythonVersion(at: path) else { continue }
+            if ver.0 < Self.minimumPythonVersion.major || (ver.0 == Self.minimumPythonVersion.major && ver.1 < Self.minimumPythonVersion.minor) {
+                continue
+            }
+            if let current = best {
+                if ver.0 > current.version.0 || (ver.0 == current.version.0 && ver.1 > current.version.1) {
+                    best = (path, ver)
+                }
+            } else {
+                best = (path, ver)
+            }
+        }
+        return best
+    }
+
+    /// Returns (major, minor) version tuple for the Python executable at `path`, or nil on failure.
+    private func pythonVersion(at path: String) -> (Int, Int)? {
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: path)
+        proc.arguments = ["-c", "import sys; print(sys.version_info.major, sys.version_info.minor)"]
+        proc.qualityOfService = .background
+        let pipe = Pipe()
+        proc.standardOutput = pipe
+        proc.standardError = Pipe()
+        do {
+            try proc.run()
+            proc.waitUntilExit()
+            guard proc.terminationStatus == 0 else { return nil }
+            let output = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let parts = output.split(separator: " ")
+            guard parts.count == 2, let major = Int(parts[0]), let minor = Int(parts[1]) else { return nil }
+            return (major, minor)
+        } catch {
+            return nil
+        }
+    }
+
+    /// Returns the Python version inside the venv, or nil if it cannot be determined.
+    private func venvPythonVersion(at venvPython: URL) -> (Int, Int)? {
+        guard FileManager.default.isExecutableFile(atPath: venvPython.path) else { return nil }
+        return pythonVersion(at: venvPython.path)
     }
 
     private func availableSwigPath() -> String? {
