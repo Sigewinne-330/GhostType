@@ -86,6 +86,18 @@ final class BackendManager {
         }
     }
 
+    /// Check if a Hugging Face model exists in the local cache.
+    /// Cache path format: ~/.cache/huggingface/hub/models--{repo_id.replace('/', '--')}
+    private static func isHFModelCached(repoId: String) -> Bool {
+        let normalizedRepo = repoId.replacingOccurrences(of: "/", with: "--")
+        let cachePath = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".cache")
+            .appendingPathComponent("huggingface")
+            .appendingPathComponent("hub")
+            .appendingPathComponent("models--\(normalizedRepo)")
+        return FileManager.default.fileExists(atPath: cachePath.path)
+    }
+
     private init() {}
 
     func startIfNeeded(
@@ -141,7 +153,22 @@ final class BackendManager {
                 return
             }
 
-            self.checkHealth(timeout: 120.0) { healthy in
+            // Determine health check timeout based on model cache status.
+            // If either ASR or LLM model is not cached, use extended timeout for first-time download.
+            let asrCached = Self.isHFModelCached(repoId: requestedConfig.asrModel)
+            let llmCached = Self.isHFModelCached(repoId: requestedConfig.llmModel)
+            let needsDownload = !asrCached || !llmCached
+            let healthCheckTimeout: TimeInterval = needsDownload ? 6000.0 : 120.0
+
+            if needsDownload {
+                let missingModels = [
+                    asrCached ? nil : "ASR(\(requestedConfig.asrModel))",
+                    llmCached ? nil : "LLM(\(requestedConfig.llmModel))"
+                ].compactMap { $0 }.joined(separator: ", ")
+                self.appLogger.log("Model(s) not cached [\(missingModels)], using extended health check timeout (6000s).")
+            }
+
+            self.checkHealth(timeout: healthCheckTimeout) { healthy in
                 if healthy {
                     self.runningLaunchConfig = requestedConfig
                     self.postIdleTimeoutConfig(seconds: requestedConfig.idleTimeoutSeconds)
