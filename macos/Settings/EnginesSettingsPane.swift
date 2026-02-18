@@ -1,6 +1,102 @@
 import AppKit
 import SwiftUI
 
+// MARK: - Download Progress Model
+
+struct ModelDownloadProgress: Equatable {
+    var repoID: String = ""
+    var status: String = "idle"  // idle, downloading, verifying, complete, error
+    var progress: Double = 0.0  // 0-100
+    var downloadedBytes: Int = 0
+    var totalBytes: Int = 0
+    var currentFile: String = ""
+    var speedMbps: Double = 0.0
+    var etaSeconds: Int = 0
+    var errorMessage: String = ""
+    
+    var isDownloading: Bool {
+        status == "downloading" || status == "verifying"
+    }
+    
+    var isComplete: Bool {
+        status == "complete"
+    }
+    
+    var isFailed: Bool {
+        status == "error"
+    }
+    
+    var formattedDownloadedSize: String {
+        ByteCountFormatter.string(fromByteCount: Int64(downloadedBytes), countStyle: .file)
+    }
+    
+    var formattedTotalSize: String {
+        ByteCountFormatter.string(fromByteCount: Int64(totalBytes), countStyle: .file)
+    }
+    
+    var formattedSpeed: String {
+        String(format: "%.1f MB/s", speedMbps)
+    }
+    
+    var formattedETA: String {
+        let minutes = etaSeconds / 60
+        let seconds = etaSeconds % 60
+        if minutes > 0 {
+            return "\(minutes)m \(seconds)s"
+        }
+        return "\(seconds)s"
+    }
+}
+
+// MARK: - Fake Download Progress View
+/// A progress bar that simulates download progress without knowing total size
+/// Uses a logarithmic scale that slows down as it approaches 90%
+struct FakeDownloadProgressView: View {
+    let downloadedBytes: Int
+    @State private var displayProgress: Double = 0.0
+    
+    // Model sizes for reference (approximate)
+    private let modelSizeReference: Double = 1_500_000_000  // ~1.5GB as reference
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    // Background
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color.secondary.opacity(0.2))
+                    
+                    // Progress bar
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color.accentColor)
+                        .frame(width: geometry.size.width * (displayProgress / 100))
+                        .animation(.easeInOut(duration: 0.3), value: displayProgress)
+                }
+            }
+            .frame(height: 6)
+        }
+        .onAppear {
+            updateProgress()
+        }
+        .onChange(of: downloadedBytes) { _, _ in
+            updateProgress()
+        }
+    }
+    
+    private func updateProgress() {
+        // Calculate fake progress: logarithmic scale that never reaches 100%
+        // This gives a realistic feeling without knowing actual total size
+        let ratio = Double(downloadedBytes) / modelSizeReference
+        // Use logarithmic scale: progress grows fast at start, slows down later
+        // Max out at 90% until download actually completes
+        let targetProgress = min(90.0, 20.0 * log10(1 + ratio * 10))
+        
+        withAnimation(.easeInOut(duration: 0.5)) {
+            displayProgress = targetProgress
+        }
+    }
+}
+
 @MainActor
 final class EnginesSettingsPaneViewModel: ObservableObject {
     struct CredentialDrafts: Equatable {
@@ -58,6 +154,7 @@ final class EnginesSettingsPaneViewModel: ObservableObject {
     @Published var probes = ProbeUIState()
     @Published var localASRModelSearch = ""
     @Published var pendingDownloadASRModelID: String = ""
+    @Published var downloadProgress = ModelDownloadProgress()
 }
 
 @MainActor
@@ -449,7 +546,7 @@ struct EnginesSettingsPane: View {
             
             HStack(spacing: 8) {
                 Button(
-                    viewModel.probes.isDownloadingLocalASRModel
+                    viewModel.downloadProgress.isDownloading
                         ? "Downloading..."
                         : "Download Model"
                 ) {
@@ -458,15 +555,93 @@ struct EnginesSettingsPane: View {
                     }
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(viewModel.probes.isDownloadingLocalASRModel || viewModel.probes.isClearingLocalASRModelCache || viewModel.pendingDownloadASRModelID.isEmpty)
+                .disabled(viewModel.downloadProgress.isDownloading || viewModel.probes.isClearingLocalASRModelCache || viewModel.pendingDownloadASRModelID.isEmpty)
             }
             
-            // Progress / Status
-            if !viewModel.probes.localASRModelActionStatus.isEmpty {
-                Text(viewModel.probes.localASRModelActionStatus)
-                    .font(.caption)
-                    .foregroundStyle(viewModel.probes.localASRModelActionStatusIsError ? Color.red : Color.secondary)
-                    .textSelection(.enabled)
+            // Download Progress UI - always show during download
+            if viewModel.downloadProgress.isDownloading || viewModel.downloadProgress.status == "verifying" || viewModel.downloadProgress.isComplete || viewModel.downloadProgress.isFailed {
+                VStack(alignment: .leading, spacing: 8) {
+                    // Status text with icon
+                    HStack {
+                        if viewModel.downloadProgress.status == "verifying" {
+                            ProgressView()
+                                .scaleEffect(0.7)
+                            Text("Verifying files...")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        } else if viewModel.downloadProgress.isDownloading {
+                            if viewModel.downloadProgress.downloadedBytes > 0 {
+                                // Has actual download progress - show static icon
+                                Image(systemName: "arrow.down.circle.fill")
+                                    .foregroundStyle(.blue)
+                            } else {
+                                // Still connecting - show spinning
+                                ProgressView()
+                                    .scaleEffect(0.7)
+                            }
+                            Text(viewModel.downloadProgress.currentFile.isEmpty ? "Downloading..." : viewModel.downloadProgress.currentFile)
+                                .font(.caption)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        } else if viewModel.downloadProgress.isComplete {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(.green)
+                            Text("Download complete!")
+                                .font(.caption)
+                                .foregroundStyle(.green)
+                        } else if viewModel.downloadProgress.isFailed {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.red)
+                            Text(viewModel.downloadProgress.errorMessage.isEmpty ? "Download failed" : viewModel.downloadProgress.errorMessage)
+                                .font(.caption)
+                                .foregroundStyle(.red)
+                        }
+                    }
+                    
+                    // Progress bar - show during downloading or verifying
+                    if viewModel.downloadProgress.isDownloading || viewModel.downloadProgress.status == "verifying" {
+                        VStack(alignment: .leading, spacing: 4) {
+                            if viewModel.downloadProgress.status == "verifying" {
+                                // Verifying - indeterminate
+                                ProgressView()
+                                    .progressViewStyle(.linear)
+                                Text("Verifying integrity...")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            } else if viewModel.downloadProgress.downloadedBytes == 0 {
+                                // No data yet - indeterminate progress bar
+                                ProgressView()
+                                    .progressViewStyle(.linear)
+                                Text("Connecting to Hugging Face...")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                // Has download data - show simulated progress bar (no percentage)
+                                FakeDownloadProgressView(downloadedBytes: viewModel.downloadProgress.downloadedBytes)
+                                
+                                // Download stats only (no percentage)
+                                HStack(spacing: 16) {
+                                    Text(viewModel.downloadProgress.formattedDownloadedSize)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                    
+                                    if viewModel.downloadProgress.speedMbps > 0 {
+                                        Text(viewModel.downloadProgress.formattedSpeed)
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    
+                                    Spacer()
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.secondary.opacity(0.15))
+                )
             }
             
             // Local Cache List
@@ -912,27 +1087,146 @@ struct EnginesSettingsPane: View {
     }
 
     private func downloadPendingLocalASRModel() async {
-        guard !viewModel.probes.isDownloadingLocalASRModel else { return }
+        guard !viewModel.downloadProgress.isDownloading else { return }
         let modelID = viewModel.pendingDownloadASRModelID
         guard !modelID.isEmpty else { return }
         
         let descriptor = engine.localASRModelDescriptor(for: modelID)
         viewModel.probes.isDownloadingLocalASRModel = true
         viewModel.probes.localASRModelActionStatusIsError = false
-        viewModel.probes.localASRModelActionStatus = "Downloading: \(descriptor.displayName)"
-        defer { viewModel.probes.isDownloadingLocalASRModel = false }
+        
+        // Reset progress with downloading status
+        viewModel.downloadProgress = ModelDownloadProgress(
+            repoID: descriptor.hfRepo,
+            status: "downloading",
+            currentFile: "Starting download..."
+        )
+        
+        defer { 
+            viewModel.probes.isDownloadingLocalASRModel = false
+        }
 
         do {
+            // Ensure backend is running
             try await ensureBackendReadyForModelManagement(asrModel: descriptor.hfRepo)
-            try await warmupLocalASRModelDownload(asrModel: descriptor.hfRepo)
+            
+            // Start SSE download
+            let repoID = descriptor.hfRepo
+            let encodedRepoID = repoID.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? repoID
+            guard let url = URL(string: "http://127.0.0.1:8765/models/download?repo_id=\(encodedRepoID)") else {
+                throw URLError(.badURL)
+            }
+            
+            var request = URLRequest(url: url, timeoutInterval: 3600)  // 1 hour timeout
+            request.cachePolicy = .reloadIgnoringLocalCacheData
+            
+            let (bytes, response) = try await URLSession.shared.bytes(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse,
+                  (200...299).contains(httpResponse.statusCode) else {
+                throw URLError(.badServerResponse)
+            }
+            
+            // Parse SSE events
+            for try await line in bytes.lines {
+                print("[download] Received line: \(line)", terminator: "")
+                if line.hasPrefix("data: ") {
+                    let jsonString = String(line.dropFirst(6))
+                    if let data = jsonString.data(using: .utf8),
+                       let event = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                        print("[download] Parsed event: \(event)")
+                        await MainActor.run {
+                            handleDownloadEvent(event, descriptor: descriptor)
+                        }
+                    }
+                }
+            }
+            
+            print("[download] SSE stream ended")
+            
+            // Check if download was successful
             let downloaded = hasLocalWhisperCache(for: descriptor.hfRepo)
-            viewModel.probes.localASRModelActionStatus = downloaded
-                ? "Model downloaded: \(descriptor.displayName)"
-                : "Download completed, but local cache not detected."
-            viewModel.probes.localASRModelActionStatusIsError = !downloaded
+            if downloaded {
+                viewModel.downloadProgress.status = "complete"
+                viewModel.downloadProgress.progress = 100.0
+                viewModel.probes.localASRModelActionStatus = "Model downloaded: \(descriptor.displayName)"
+                
+                // Show success for 3 seconds, then reset
+                Task {
+                    try? await Task.sleep(nanoseconds: 3_000_000_000)
+                    if viewModel.downloadProgress.status == "complete" {
+                        viewModel.downloadProgress = ModelDownloadProgress()
+                    }
+                }
+            } else {
+                viewModel.downloadProgress.status = "error"
+                viewModel.downloadProgress.errorMessage = "Download completed, but local cache not detected."
+                viewModel.probes.localASRModelActionStatus = "Download completed, but local cache not detected."
+                viewModel.probes.localASRModelActionStatusIsError = true
+            }
         } catch {
+            print("[download] Error: \(error)")
+            viewModel.downloadProgress.status = "error"
+            viewModel.downloadProgress.errorMessage = error.localizedDescription
             viewModel.probes.localASRModelActionStatusIsError = true
             viewModel.probes.localASRModelActionStatus = "Download failed: \(error.localizedDescription)"
+        }
+    }
+    
+    private func handleDownloadEvent(_ event: [String: Any], descriptor: LocalASRModelDescriptor) {
+        guard let eventType = event["event"] as? String else { return }
+        print("[download] Handling event: \(eventType) - \(event)")
+        
+        switch eventType {
+        case "start":
+            viewModel.downloadProgress.status = "downloading"
+            viewModel.downloadProgress.repoID = event["repo_id"] as? String ?? descriptor.hfRepo
+            viewModel.downloadProgress.currentFile = "Starting download..."
+            
+        case "info":
+            viewModel.downloadProgress.currentFile = "Discovering files..."
+            
+        case "progress":
+            if let progress = event["progress"] as? Double, progress > viewModel.downloadProgress.progress {
+                viewModel.downloadProgress.progress = progress
+            }
+            if let downloaded = event["downloaded_bytes"] as? Int {
+                viewModel.downloadProgress.downloadedBytes = downloaded
+            }
+            if let total = event["total_bytes"] as? Int, total > 0 {
+                viewModel.downloadProgress.totalBytes = total
+            }
+            if let file = event["current_file"] as? String, !file.isEmpty {
+                viewModel.downloadProgress.currentFile = file
+            }
+            if let speed = event["speed_mbps"] as? Double {
+                viewModel.downloadProgress.speedMbps = speed
+            }
+            if let eta = event["eta_seconds"] as? Int {
+                viewModel.downloadProgress.etaSeconds = eta
+            }
+            
+        case "verifying":
+            viewModel.downloadProgress.status = "verifying"
+            viewModel.downloadProgress.currentFile = "Verifying files..."
+            
+        case "complete":
+            viewModel.downloadProgress.status = "complete"
+            viewModel.downloadProgress.progress = 100.0
+            viewModel.probes.localASRModelActionStatus = "Model downloaded: \(descriptor.displayName)"
+            print("[download] Complete event received")
+            // Refresh model list after download
+            engine.selectedLocalASRModelID = descriptor.id
+            
+        case "error":
+            viewModel.downloadProgress.status = "error"
+            viewModel.downloadProgress.errorMessage = event["message"] as? String ?? "Unknown error"
+            viewModel.probes.localASRModelActionStatusIsError = true
+            viewModel.probes.localASRModelActionStatus = "Download failed: \(viewModel.downloadProgress.errorMessage)"
+            
+        default:
+            print("[download] Unknown event type: \(eventType)")
+            break
         }
     }
 

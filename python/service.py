@@ -2644,6 +2644,199 @@ def normalize_audio_path(path_value: str) -> str:
     return str(path)
 
 
+# =============================================================================
+# Model Download Manager
+# =============================================================================
+
+class ModelDownloadStatus(BaseModel):
+    """Progress status for model downloads."""
+    repo_id: str
+    status: str = "idle"  # idle, downloading, verifying, complete, error, cancelled
+    progress: float = 0.0  # 0-100
+    downloaded_bytes: int = 0
+    total_bytes: int = 0
+    current_file: str = ""
+    speed_mbps: float = 0.0
+    eta_seconds: int = 0
+    error_message: str = ""
+    started_at: str = ""
+    updated_at: str = ""
+
+
+class DownloadProgressEvent:
+    """Event for SSE streaming."""
+    def __init__(self, event: str, data: dict):
+        self.event = event
+        self.data = data
+
+
+class ModelDownloadManager:
+    """Manages model downloads with progress tracking."""
+    
+    def __init__(self):
+        self._downloads: dict[str, ModelDownloadStatus] = {}
+        self._lock = threading.Lock()
+    
+    def get_status(self, repo_id: str) -> ModelDownloadStatus | None:
+        with self._lock:
+            return self._downloads.get(repo_id)
+    
+    def get_all_status(self) -> dict[str, ModelDownloadStatus]:
+        with self._lock:
+            return dict(self._downloads)
+    
+    def _update_status(self, repo_id: str, **kwargs) -> ModelDownloadStatus:
+        with self._lock:
+            status = self._downloads.get(repo_id, ModelDownloadStatus(repo_id=repo_id))
+            for key, value in kwargs.items():
+                if hasattr(status, key):
+                    setattr(status, key, value)
+            status.updated_at = utc_now_iso()
+            self._downloads[repo_id] = status
+            return status
+
+    async def download_model_sse(self, repo_id: str) -> Any:
+        """Download model and yield SSE progress events."""
+        import asyncio
+        import huggingface_hub as hf
+        import threading
+        
+        self._update_status(
+            repo_id,
+            status="downloading",
+            progress=0.0,
+            downloaded_bytes=0,
+            total_bytes=0,
+            current_file="Initializing...",
+            speed_mbps=0.0,
+            eta_seconds=0,
+            error_message="",
+            started_at=utc_now_iso(),
+        )
+        
+        yield f"data: {json.dumps({'event': 'start', 'repo_id': repo_id, 'current_file': 'Connecting to Hugging Face...'})}\n\n"
+        
+        # Use threading.Event for synchronization
+        done_event = threading.Event()
+        download_result = {"path": None, "error": None}
+        
+        cache_dir = Path.home() / ".cache" / "huggingface" / "hub"
+        model_cache_dir = cache_dir / f"models--{repo_id.replace('/', '--')}"
+        
+        def get_dir_size(path: Path) -> int:
+            """Get total size of directory."""
+            if not path.exists():
+                return 0
+            total = 0
+            try:
+                for f in path.rglob("*"):
+                    if f.is_file():
+                        try:
+                            total += f.stat().st_size
+                        except:
+                            pass
+            except:
+                pass
+            return total
+        
+        initial_size = get_dir_size(model_cache_dir)
+        start_time = time.time()
+        print(f"[download] Starting download for {repo_id}, initial size: {initial_size}", flush=True)
+        
+        def run_download():
+            """Run the actual download in a thread."""
+            try:
+                print(f"[download] Calling snapshot_download for {repo_id}", flush=True)
+                result = hf.snapshot_download(
+                    repo_id,
+                    local_files_only=False,
+                    resume_download=True,
+                )
+                download_result["path"] = result
+                print(f"[download] Download complete for {repo_id}", flush=True)
+                
+            except Exception as e:
+                download_result["error"] = str(e)
+                print(f"[download] Error for {repo_id}: {e}", flush=True)
+            finally:
+                done_event.set()
+        
+        # Start download in a daemon thread
+        download_thread = threading.Thread(target=run_download, daemon=True)
+        download_thread.start()
+        
+        last_size = initial_size
+        last_emit_time = start_time
+        
+        # Stream progress events while download is running
+        while not done_event.is_set():
+            try:
+                # Wait before checking
+                await asyncio.sleep(0.3)
+                
+                # Check current download size
+                current_size = get_dir_size(model_cache_dir)
+                
+                # Calculate speed
+                now = time.time()
+                elapsed = now - start_time
+                speed_mbps = 0.0
+                if elapsed > 0:
+                    speed_mbps = (current_size - initial_size) / elapsed / (1024 * 1024)
+                
+                # Emit progress when size changes or every second
+                should_emit = (current_size != last_size) or (now - last_emit_time >= 1.0)
+                
+                if should_emit:
+                    progress_data = {
+                        'event': 'progress',
+                        'repo_id': repo_id,
+                        'downloaded_bytes': current_size,
+                        'speed_mbps': round(speed_mbps, 2),
+                        'current_file': 'Downloading model files...',
+                    }
+                    print(f"[download] Progress: {current_size} bytes, {speed_mbps:.2f} MB/s", flush=True)
+                    yield f"data: {json.dumps(progress_data)}\n\n"
+                    
+                    self._update_status(
+                        repo_id,
+                        downloaded_bytes=current_size,
+                        speed_mbps=round(speed_mbps, 2),
+                        current_file="Downloading model files...",
+                    )
+                    
+                    last_size = current_size
+                    last_emit_time = now
+                
+            except asyncio.CancelledError:
+                break
+        
+        # Wait for download thread to complete
+        download_thread.join(timeout=2.0)
+        
+        print(f"[download] Download loop finished for {repo_id}, error: {download_result['error']}", flush=True)
+        
+        # Handle download result
+        if download_result["error"]:
+            self._update_status(repo_id, status="error", error_message=download_result["error"])
+            yield f"data: {json.dumps({'event': 'error', 'repo_id': repo_id, 'message': download_result['error']})}\n\n"
+        else:
+            # Final size
+            final_size = get_dir_size(model_cache_dir)
+            
+            # Verification phase
+            self._update_status(repo_id, status="verifying", current_file="Verifying files...")
+            yield f"data: {json.dumps({'event': 'verifying', 'repo_id': repo_id})}\n\n"
+            await asyncio.sleep(0.3)
+            
+            self._update_status(repo_id, status="complete", progress=100.0, downloaded_bytes=final_size)
+            yield f"data: {json.dumps({'event': 'complete', 'repo_id': repo_id, 'path': download_result['path'], 'downloaded_bytes': final_size})}\n\n"
+
+
+# Global download manager instance
+download_manager = ModelDownloadManager()
+
+
 def create_app(runtime: ResidentModelRuntime) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -2736,6 +2929,33 @@ def create_app(runtime: ResidentModelRuntime) -> FastAPI:
     @app.post("/style/clear")
     def clear_style_profile() -> dict[str, Any]:
         return runtime.clear_style_profile()
+
+    # =========================================================================
+    # Model Download Endpoints
+    # =========================================================================
+
+    @app.get("/models/download/status")
+    def get_download_status(repo_id: str | None = None) -> dict[str, Any]:
+        """Get download status for a specific model or all models."""
+        if repo_id:
+            status = download_manager.get_status(repo_id)
+            if status:
+                return {"status": status.model_dump()}
+            return {"status": None}
+        return {"statuses": {k: v.model_dump() for k, v in download_manager.get_all_status().items()}}
+
+    @app.get("/models/download")
+    async def download_model(repo_id: str) -> StreamingResponse:
+        """Download a model with SSE progress updates."""
+        return StreamingResponse(
+            download_manager.download_model_sse(repo_id),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
 
     return app
 
