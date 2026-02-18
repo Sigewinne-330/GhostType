@@ -123,7 +123,7 @@ extension InferenceCoordinator {
             state.lastError = "Missing credentials: \(names). Open Settings -> Engines & Models to configure."
             state.stage = .failed
             state.processStatus = "Failed"
-            hudPanel.showError(message: "Credentials Needed")
+            hudPanel.showError(message: state.ui("需要配置密钥", "Credentials Needed"))
             hudPanel.hide(after: 1.2)
             onOpenSettingsRequested?()
             appLogger.log(
@@ -203,7 +203,7 @@ extension InferenceCoordinator {
             state.stage = .failed
             state.processStatus = "Failed"
             state.lastError = "Inference routing failed: \(error.localizedDescription)"
-            hudPanel.showError(message: "Routing Error")
+            hudPanel.showError(message: state.ui("路由错误", "Routing Error"))
             hudPanel.hide(after: 1.0)
             removeTemporaryFileIfPresent(at: audioURL, context: "runInference.routingFailed")
             clearWorkflowState(for: recordingSessionID, clearTargetApplication: false)
@@ -378,7 +378,7 @@ extension InferenceCoordinator {
                         self.state.stage = .failed
                         self.state.processStatus = "Failed"
                         self.state.lastError = "Inference failed: \(error.localizedDescription)"
-                        self.hudPanel.showError(message: "Inference Error")
+                        self.hudPanel.showError(message: self.state.ui("推理错误", "Inference Error"))
                         self.hudPanel.hide(after: 1.0)
                         self.resultOverlay.hide(after: 0.2)
                         self.appLogger.log(
@@ -815,7 +815,7 @@ extension InferenceCoordinator {
             )
             if !outcome.success {
                 self.state.lastError = "Auto insert failed. Content remains in clipboard."
-                self.hudPanel.showError(message: "Copied")
+                self.hudPanel.showError(message: self.state.ui("已复制", "Copied"))
                 self.hudPanel.hide(after: 1.0)
                 self.appLogger.log(
                     "Output insertion failed. sessionId=\(sessionID.uuidString) path=\(outcome.path.rawValue) details=\(outcome.debugInfo)",
@@ -924,7 +924,7 @@ extension InferenceCoordinator {
         if isRecording || isInferenceRunning {
             cancelCurrentOperation(
                 reason: "Cancelled by user.",
-                hudMessage: "Cancelled"
+                hudMessage: state.ui("已取消", "Cancelled")
             )
             return
         }
@@ -975,7 +975,7 @@ extension InferenceCoordinator {
             guard let self else { return }
             guard self.activeInferenceID == firedInferenceID else { return }
             self.appLogger.log("Inference watchdog triggered: \(reason)", type: .error)
-            self.cancelCurrentOperation(reason: reason, hudMessage: "Timed Out")
+            self.cancelCurrentOperation(reason: reason, hudMessage: self.state.ui("超时", "Timed Out"))
         }
     }
 

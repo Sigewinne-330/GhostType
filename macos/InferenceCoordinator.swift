@@ -86,7 +86,7 @@ final class InferenceCoordinator {
         )
 
         hudPanel.onCancelRequested = { [weak self] in
-            self?.cancelCurrentOperation(reason: "Cancelled by user.", hudMessage: "Cancelled")
+            self?.cancelCurrentOperation(reason: "Cancelled by user.", hudMessage: self?.state.ui("已取消", "Cancelled") ?? "Cancelled")
         }
         resultOverlay.onCancelRequested = { [weak self] in
             self?.handleResultOverlayCancelRequested()

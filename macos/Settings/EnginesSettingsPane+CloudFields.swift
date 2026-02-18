@@ -40,18 +40,18 @@ extension EnginesSettingsPane {
                 }
             }
             .pickerStyle(.menu)
-            TextField("ASR API Key Ref", text: $engine.cloudASRApiKeyRef)
+            TextField(prefs.ui("ASR API 密钥引用", "ASR API Key Ref"), text: $engine.cloudASRApiKeyRef)
                 .textFieldStyle(.roundedBorder)
-            TextField("ASR Custom Headers JSON", text: $engine.cloudASRHeadersJSON, axis: .vertical)
+            TextField(prefs.ui("ASR 自定义请求头 JSON", "ASR Custom Headers JSON"), text: $engine.cloudASRHeadersJSON, axis: .vertical)
                 .textFieldStyle(.roundedBorder)
-            Picker("ASR Kind", selection: $engine.cloudASRProviderKind) {
+            Picker(prefs.ui("ASR 类型", "ASR Kind"), selection: $engine.cloudASRProviderKind) {
                 ForEach(ProviderKind.allCases) { kind in
                     Text(providerKindLabel(kind)).tag(kind)
                 }
             }
             .pickerStyle(.menu)
             HStack(spacing: 8) {
-                Text("ASR Timeout (s)")
+                Text(prefs.ui("ASR 超时 (秒)", "ASR Timeout (s)"))
                 Spacer()
                 TextField("", value: $engine.cloudASRTimeoutSec, format: .number.precision(.fractionLength(0)))
                     .textFieldStyle(.roundedBorder)
@@ -60,7 +60,7 @@ extension EnginesSettingsPane {
                     .labelsHidden()
             }
             HStack(spacing: 8) {
-                Text("ASR Max Retries")
+                Text(prefs.ui("ASR 最大重试次数", "ASR Max Retries"))
                 Spacer()
                 Stepper(value: $engine.cloudASRMaxRetries, in: 0...8) {
                     Text("\(engine.cloudASRMaxRetries)")
@@ -68,14 +68,14 @@ extension EnginesSettingsPane {
                 }
             }
             HStack(spacing: 8) {
-                Text("ASR Max In-Flight")
+                Text(prefs.ui("ASR 最大并发数", "ASR Max In-Flight"))
                 Spacer()
                 Stepper(value: $engine.cloudASRMaxInFlight, in: 1...8) {
                     Text("\(engine.cloudASRMaxInFlight)")
                         .monospacedDigit()
                 }
             }
-            Toggle("ASR Streaming Enabled", isOn: $engine.cloudASRStreamingEnabled)
+            Toggle(prefs.ui("启用 ASR 流式传输", "ASR Streaming Enabled"), isOn: $engine.cloudASRStreamingEnabled)
             if engine.asrEngine == .deepgram {
                 Picker(prefs.ui("Region", "Region"), selection: $engine.deepgram.region) {
                     ForEach(DeepgramRegionOption.allCases) { region in
@@ -241,18 +241,18 @@ extension EnginesSettingsPane {
                 }
             }
             .pickerStyle(.menu)
-            TextField("LLM API Key Ref", text: $engine.cloudLLMApiKeyRef)
+            TextField(prefs.ui("LLM API 密钥引用", "LLM API Key Ref"), text: $engine.cloudLLMApiKeyRef)
                 .textFieldStyle(.roundedBorder)
-            TextField("LLM Custom Headers JSON", text: $engine.cloudLLMHeadersJSON, axis: .vertical)
+            TextField(prefs.ui("LLM 自定义请求头 JSON", "LLM Custom Headers JSON"), text: $engine.cloudLLMHeadersJSON, axis: .vertical)
                 .textFieldStyle(.roundedBorder)
-            Picker("LLM Kind", selection: $engine.cloudLLMProviderKind) {
+            Picker(prefs.ui("LLM 类型", "LLM Kind"), selection: $engine.cloudLLMProviderKind) {
                 ForEach(ProviderKind.allCases) { kind in
                     Text(providerKindLabel(kind)).tag(kind)
                 }
             }
             .pickerStyle(.menu)
             HStack(spacing: 8) {
-                Text("LLM Timeout (s)")
+                Text(prefs.ui("LLM 超时 (秒)", "LLM Timeout (s)"))
                 Spacer()
                 TextField("", value: $engine.cloudLLMTimeoutSec, format: .number.precision(.fractionLength(0)))
                     .textFieldStyle(.roundedBorder)
@@ -261,7 +261,7 @@ extension EnginesSettingsPane {
                     .labelsHidden()
             }
             HStack(spacing: 8) {
-                Text("LLM Max Retries")
+                Text(prefs.ui("LLM 最大重试次数", "LLM Max Retries"))
                 Spacer()
                 Stepper(value: $engine.cloudLLMMaxRetries, in: 0...8) {
                     Text("\(engine.cloudLLMMaxRetries)")
@@ -269,14 +269,14 @@ extension EnginesSettingsPane {
                 }
             }
             HStack(spacing: 8) {
-                Text("LLM Max In-Flight")
+                Text(prefs.ui("LLM 最大并发数", "LLM Max In-Flight"))
                 Spacer()
                 Stepper(value: $engine.cloudLLMMaxInFlight, in: 1...8) {
                     Text("\(engine.cloudLLMMaxInFlight)")
                         .monospacedDigit()
                 }
             }
-            Toggle("LLM SSE Streaming Enabled", isOn: $engine.cloudLLMStreamingEnabled)
+            Toggle(prefs.ui("启用 LLM SSE 流式传输", "LLM SSE Streaming Enabled"), isOn: $engine.cloudLLMStreamingEnabled)
             Button(viewModel.probes.isTestingLLMConnection ? prefs.ui("测试中...", "Testing...") : prefs.ui("测试 LLM 连接", "Test LLM Connection")) {
                 Task {
                     await testLLMConnection()
@@ -294,7 +294,7 @@ extension EnginesSettingsPane {
             DisclosureGroup(prefs.ui("模型参数", "Model Parameters")) {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
-                        Text("Temperature")
+                        Text(prefs.ui("温度 (Temperature)", "Temperature"))
                         Spacer()
                         Text(String(format: "%.2f", engine.llmTemperature))
                             .foregroundStyle(.secondary)
@@ -311,7 +311,7 @@ extension EnginesSettingsPane {
 
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
-                        Text("Top-P")
+                        Text(prefs.ui("Top-P", "Top-P"))
                         Spacer()
                         Text(String(format: "%.2f", engine.llmTopP))
                             .foregroundStyle(.secondary)

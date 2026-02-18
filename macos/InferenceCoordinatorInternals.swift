@@ -148,7 +148,7 @@ extension InferenceCoordinator {
                 self.state.stage = .failed
                 self.state.processStatus = "Failed"
                 self.state.lastError = "Backend startup failed: \(error.localizedDescription)"
-                self.hudPanel.showError(message: "Backend Error")
+                self.hudPanel.showError(message: self.state.ui("后端错误", "Backend Error"))
                 self.hudPanel.hide(after: 1.0)
                 self.finishInferenceContext(inferenceID: inferenceID, audioURL: audioURL)
                 self.clearWorkflowState(for: recordingSessionID, clearTargetApplication: false)

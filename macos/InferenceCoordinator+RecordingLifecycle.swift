@@ -43,7 +43,7 @@ extension InferenceCoordinator {
         if isInferenceRunning {
             cancelCurrentOperation(
                 reason: "Cancelled by user.",
-                hudMessage: "Cancelled"
+                hudMessage: state.ui("已取消", "Cancelled")
             )
             return
         }
@@ -103,7 +103,7 @@ extension InferenceCoordinator {
             state.processStatus = "Failed"
             state.lastError = "Failed to start recording: \(error.localizedDescription)"
             activeRecordingSessionID = nil
-            hudPanel.showError(message: "Mic Error")
+            hudPanel.showError(message: state.ui("麦克风错误", "Mic Error"))
             hudPanel.hide(after: 1.0)
             appLogger.log("Failed to start recording: \(error.localizedDescription)", type: .error)
         }
@@ -171,7 +171,7 @@ extension InferenceCoordinator {
                 self.state.stage = .failed
                 self.state.processStatus = "Failed"
                 self.state.lastError = "Failed to stop recording: \(error.localizedDescription)"
-                self.hudPanel.showError(message: "Record Stop Error")
+                self.hudPanel.showError(message: self.state.ui("录音停止错误", "Record Stop Error"))
                 self.hudPanel.hide(after: 1.0)
                 self.activeRecordingSessionID = nil
                 self.contextManager.removeSelection(for: sessionID)

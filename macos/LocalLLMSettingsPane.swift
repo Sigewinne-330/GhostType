@@ -30,15 +30,15 @@ struct LocalLLMInlineConfigView: View {
 
     var body: some View {
         // MARK: - Active Configuration Section
-        Text("Active Configuration")
+        Text(prefs.ui("当前配置", "Active Configuration"))
             .font(.headline.weight(.semibold))
         
         if installedLLMModels.isEmpty {
-            Text("No installed models. Use Model Manager below to download.")
+            Text(prefs.ui("没有已安装的模型。请使用下方的模型管理器下载。", "No installed models. Use Model Manager below to download."))
                 .font(.caption)
                 .foregroundStyle(.secondary)
         } else {
-            Picker("Select Model (installed only)", selection: $engine.llmModel) {
+            Picker(prefs.ui("选择模型（仅已安装）", "Select Model (installed only)"), selection: $engine.llmModel) {
                 ForEach(installedLLMModels, id: \.repoId) { entry in
                     Text(entry.displayName).tag(entry.repoId)
                 }
@@ -62,7 +62,7 @@ struct LocalLLMInlineConfigView: View {
             }
         } label: {
             HStack {
-                Text("Choose quantization:")
+                Text(prefs.ui("选择量化：", "Choose quantization:"))
                 Text(quantizationDisplayName(currentQuant))
                 Spacer()
                 Image(systemName: "chevron.up.chevron.down")
@@ -96,31 +96,31 @@ struct LocalLLMInlineConfigView: View {
         statusBox
         
         // MARK: - Model Manager Section
-        Text("Model Manager")
+        Text(prefs.ui("模型管理器", "Model Manager"))
             .font(.headline.weight(.semibold))
         
-        TextField("Search Local LLM Models", text: $searchText)
+        TextField(prefs.ui("搜索本地 LLM 模型", "Search Local LLM Models"), text: $searchText)
             .textFieldStyle(.roundedBorder)
         
         HStack {
-            Button("Refresh List") {
+            Button(prefs.ui("刷新列表", "Refresh List")) {
                 searchText = ""
             }
             .buttonStyle(.bordered)
             
             Spacer()
             
-            Toggle("Show advanced models (2bit / fp16 / fp32)", isOn: $engine.localLLMShowAdvancedQuantization)
+            Toggle(prefs.ui("显示高级模型（2bit / fp16 / fp32）", "Show advanced models (2bit / fp16 / fp32)"), isOn: $engine.localLLMShowAdvancedQuantization)
                 .toggleStyle(.checkbox)
         }
         
         // Download New Model - separate from active model selection
-        Picker("Download New Model", selection: $viewModel.pendingDownloadLLMModelID) {
+        Picker(prefs.ui("下载新模型", "Download New Model"), selection: $viewModel.pendingDownloadLLMModelID) {
             ForEach(downloadableLLMModels, id: \.repoId) { entry in
                 HStack {
                     Text(entry.displayName)
                     if hasLLMCache(for: entry.repoId) {
-                        Text("(installed)")
+                        Text(prefs.ui("（已安装）", "(installed)"))
                     }
                 }.tag(entry.repoId)
             }
@@ -135,8 +135,8 @@ struct LocalLLMInlineConfigView: View {
         HStack(spacing: 8) {
             Button(
                 viewModel.llmDownloadProgress.isDownloading
-                    ? "Downloading..."
-                    : "Download Model"
+                    ? prefs.ui("正在下载...", "Downloading...")
+                    : prefs.ui("下载模型", "Download Model")
             ) {
                 Task {
                     await downloadPendingLocalLLMModel()
@@ -152,7 +152,7 @@ struct LocalLLMInlineConfigView: View {
         }
         
         // Local Cache List
-        Text("Local Cache:")
+        Text(prefs.ui("本地缓存：", "Local Cache:"))
             .font(.headline.weight(.semibold))
         
         ForEach(installedLLMModels, id: \.repoId) { entry in
@@ -165,7 +165,7 @@ struct LocalLLMInlineConfigView: View {
                     }
                 }
                 Spacer()
-                Button("Delete") {
+                Button(prefs.ui("删除", "Delete")) {
                     Task {
                         engine.llmModel = entry.repoId
                         await clearSelectedLocalLLMModelCache()
@@ -178,13 +178,13 @@ struct LocalLLMInlineConfigView: View {
         
         // Cache Actions
         HStack(spacing: 8) {
-            Button("Reveal Cache in Finder") {
+            Button(prefs.ui("在 Finder 中显示缓存", "Reveal Cache in Finder")) {
                 revealLLMCacheInFinder()
             }
             .buttonStyle(.bordered)
             .disabled(viewModel.llmDownloadProgress.isDownloading || viewModel.probes.isClearingLocalLLMModelCache)
             
-            Button("Clear Model Cache") {
+            Button(prefs.ui("清除模型缓存", "Clear Model Cache")) {
                 Task {
                     await clearSelectedLocalLLMModelCache()
                 }
@@ -195,8 +195,8 @@ struct LocalLLMInlineConfigView: View {
         
         Button(
             catalog.isRefreshing
-                ? "Refreshing..."
-                : "Refresh Catalog (Hugging Face)"
+                ? prefs.ui("正在刷新...", "Refreshing...")
+                : prefs.ui("刷新模型目录 (Hugging Face)", "Refresh Catalog (Hugging Face)")
         ) {
             Task {
                 await catalog.refreshFromHuggingFace()
@@ -224,39 +224,39 @@ struct LocalLLMInlineConfigView: View {
                     Circle()
                         .fill(llmStatusColor(for: entry))
                         .frame(width: 8, height: 8)
-                    Text("Status: \(llmStatus(for: entry))")
+                    Text(prefs.ui("状态：", "Status:") + " \(llmStatus(for: entry))")
                         .font(.caption)
                 }
-                Text("Repo: \(engine.llmModel)")
+                Text(prefs.ui("仓库：", "Repo:") + " \(engine.llmModel)")
                     .font(.caption)
                     .textSelection(.enabled)
                 
                 if let entry = entry {
                     if let paramScale = entry.paramScale {
-                        Text("Parameters: \(paramScale)")
+                        Text(prefs.ui("参数量：", "Parameters:") + " \(paramScale)")
                             .font(.caption)
                     }
                     
                     let sizeStr = entry.sizeBytesEstimate != nil 
                         ? ByteCountFormatter.string(fromByteCount: entry.sizeBytesEstimate!, countStyle: .file)
-                        : "Size unknown - refresh catalog"
-                    Text("Est. disk usage: \(sizeStr)")
+                        : prefs.ui("大小未知 - 刷新目录", "Size unknown - refresh catalog")
+                    Text(prefs.ui("预计磁盘占用：", "Est. disk usage:") + " \(sizeStr)")
                         .font(.caption)
                     
                     if let license = entry.license {
-                        Text("License: \(license)")
+                        Text(prefs.ui("许可证：", "License:") + " \(license)")
                             .font(.caption)
                     }
                     
                     if let hasCT = entry.hasChatTemplate {
-                        Text(hasCT ? "Chat Template: Available" : "Chat Template: Not detected")
+                        Text(hasCT ? prefs.ui("聊天模板：可用", "Chat Template: Available") : prefs.ui("聊天模板：未检测到", "Chat Template: Not detected"))
                             .font(.caption)
                     }
                 } else {
                     // Fallback for models not in catalog
-                    Text("Parameters: Unknown")
+                    Text(prefs.ui("参数量：未知", "Parameters: Unknown"))
                         .font(.caption)
-                    Text("Est. disk usage: Size unknown - refresh catalog")
+                    Text(prefs.ui("预计磁盘占用：大小未知 - 刷新目录", "Est. disk usage: Size unknown - refresh catalog"))
                         .font(.caption)
                 }
             }
@@ -272,7 +272,7 @@ struct LocalLLMInlineConfigView: View {
         // Temperature
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text("Temperature")
+                Text(prefs.ui("温度 (Temperature)", "Temperature"))
                 Spacer()
                 Text(String(format: "%.2f", engine.llmTemperature))
                     .foregroundStyle(.secondary)
@@ -290,7 +290,7 @@ struct LocalLLMInlineConfigView: View {
         // Top-P
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text("Top-P")
+                Text(prefs.ui("Top-P", "Top-P"))
                 Spacer()
                 Text(String(format: "%.2f", engine.llmTopP))
                     .foregroundStyle(.secondary)
@@ -338,7 +338,7 @@ struct LocalLLMInlineConfigView: View {
         // Seed
         HStack(spacing: 8) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Seed")
+                Text(prefs.ui("随机种子", "Seed"))
                 Text(prefs.ui("设为 -1 则随机", "Set to -1 for random"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -379,7 +379,7 @@ struct LocalLLMInlineConfigView: View {
                 if viewModel.llmDownloadProgress.status == "verifying" {
                     ProgressView()
                         .scaleEffect(0.7)
-                    Text("Verifying files...")
+                    Text(prefs.ui("正在验证文件...", "Verifying files..."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else if viewModel.llmDownloadProgress.isDownloading {
@@ -390,20 +390,20 @@ struct LocalLLMInlineConfigView: View {
                         ProgressView()
                             .scaleEffect(0.7)
                     }
-                    Text(viewModel.llmDownloadProgress.currentFile.isEmpty ? "Downloading..." : viewModel.llmDownloadProgress.currentFile)
+                    Text(viewModel.llmDownloadProgress.currentFile.isEmpty ? prefs.ui("正在下载...", "Downloading...") : viewModel.llmDownloadProgress.currentFile)
                         .font(.caption)
                         .lineLimit(1)
                         .truncationMode(.middle)
                 } else if viewModel.llmDownloadProgress.isComplete {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundStyle(.green)
-                    Text("Download complete!")
+                    Text(prefs.ui("下载完成！", "Download complete!"))
                         .font(.caption)
                         .foregroundStyle(.green)
                 } else if viewModel.llmDownloadProgress.isFailed {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundStyle(.red)
-                    Text(viewModel.llmDownloadProgress.errorMessage.isEmpty ? "Download failed" : viewModel.llmDownloadProgress.errorMessage)
+                    Text(viewModel.llmDownloadProgress.errorMessage.isEmpty ? prefs.ui("下载失败", "Download failed") : viewModel.llmDownloadProgress.errorMessage)
                         .font(.caption)
                         .foregroundStyle(.red)
                 }
@@ -415,13 +415,13 @@ struct LocalLLMInlineConfigView: View {
                     if viewModel.llmDownloadProgress.status == "verifying" {
                         ProgressView()
                             .progressViewStyle(.linear)
-                        Text("Verifying integrity...")
+                        Text(prefs.ui("正在验证完整性...", "Verifying integrity..."))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     } else if viewModel.llmDownloadProgress.downloadedBytes == 0 {
                         ProgressView()
                             .progressViewStyle(.linear)
-                        Text("Connecting to Hugging Face...")
+                        Text(prefs.ui("正在连接 Hugging Face...", "Connecting to Hugging Face..."))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     } else {
