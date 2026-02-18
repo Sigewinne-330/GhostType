@@ -96,12 +96,12 @@ def initialize_models():
     """
     global llm_model, llm_tokenizer
 
-    print(f"⏳ 正在检查并下载 LLM 模型: {LLM_REPO} ...")
+    print("⏳ 正在检查并加载 LLM 模型...")
     # 这行代码会在首次运行时自动下载 4-bit 量化模型，之后直接从本地缓存读取
     llm_model, llm_tokenizer = load(LLM_REPO)
     print("✅ LLM 模型加载成功并驻留内存！")
 
-    print(f"⏳ 正在检查并下载 ASR 模型: {ASR_REPO} ...")
+    print("⏳ 正在检查并加载 ASR 模型...")
     # MLX Whisper 默认在执行 transcribe 时才会下载模型。
     # 为了强制它在启动时就下载并缓存，我们传入一段 1 秒的纯静音空白音频做一次 Dummy 推理。
     dummy_audio = np.zeros(16000, dtype=np.float32)

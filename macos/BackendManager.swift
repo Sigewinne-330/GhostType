@@ -78,6 +78,12 @@ final class BackendManager {
         let asrModel: String
         let llmModel: String
         let idleTimeoutSeconds: Int?
+        
+        // Only compare idleTimeoutSeconds for restart decision
+        // Model changes are handled dynamically by the backend
+        static func == (lhs: LaunchConfig, rhs: LaunchConfig) -> Bool {
+            lhs.idleTimeoutSeconds == rhs.idleTimeoutSeconds
+        }
     }
 
     private init() {}

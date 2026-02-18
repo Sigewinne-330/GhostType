@@ -374,60 +374,66 @@ enum EngineSettingsCatalog {
     static let supportedASRLanguageCodes: Set<String> = Set(supportedASRLanguages.map(\.code))
 
     static let localLLMModelPresets: [String] = [
-        "mlx-community/Qwen2.5-0.5B-Instruct",
-        "mlx-community/Qwen2.5-1.5B-Instruct",
-        "mlx-community/Qwen2.5-3B-Instruct",
-        "mlx-community/Qwen2.5-7B-Instruct",
-        "mlx-community/Qwen2.5-14B-Instruct",
+        // Qwen2.5 4-bit quantized (most popular)
         "mlx-community/Qwen2.5-0.5B-Instruct-4bit",
         "mlx-community/Qwen2.5-1.5B-Instruct-4bit",
         "mlx-community/Qwen2.5-3B-Instruct-4bit",
         "mlx-community/Qwen2.5-7B-Instruct-4bit",
         "mlx-community/Qwen2.5-14B-Instruct-4bit",
         "mlx-community/Qwen2.5-32B-Instruct-4bit",
+        // Qwen2.5 Coder
         "mlx-community/Qwen2.5-Coder-7B-Instruct-4bit",
         "mlx-community/Qwen2.5-Coder-14B-Instruct-4bit",
+        // Qwen2.5 8-bit
         "mlx-community/Qwen2.5-0.5B-Instruct-8bit",
+        "mlx-community/Qwen2.5-1.5B-Instruct-8bit",
+        "mlx-community/Qwen2.5-3B-Instruct-8bit",
+        "mlx-community/Qwen2.5-7B-Instruct-8bit",
+        "mlx-community/Qwen2.5-14B-Instruct-8bit",
+        "mlx-community/Qwen2.5-32B-Instruct-8bit",
+        // Qwen2.5 fp16
+        "mlx-community/Qwen2.5-1.5B-Instruct-fp16",
+        "mlx-community/Qwen2.5-3B-Instruct-fp16",
+        "mlx-community/Qwen2.5-7B-Instruct-fp16",
+        "mlx-community/Qwen2.5-14B-Instruct-fp16",
+        // Qwen2.5 Coder fp16
+        "mlx-community/Qwen2.5-Coder-7B-Instruct-fp16",
+        "mlx-community/Qwen2.5-Coder-14B-Instruct-fp16",
+        // Llama 3.2
         "mlx-community/Llama-3.2-1B-Instruct-4bit",
         "mlx-community/Llama-3.2-3B-Instruct-4bit",
         "mlx-community/Llama-3.2-1B-Instruct-8bit",
         "mlx-community/Llama-3.2-3B-Instruct-8bit",
         "mlx-community/Llama-3.2-1B-Instruct-fp16",
         "mlx-community/Llama-3.2-3B-Instruct-fp16",
+        // Llama 3.1
         "mlx-community/Llama-3.1-8B-Instruct-4bit",
         "mlx-community/Llama-3.1-8B-Instruct-8bit",
         "mlx-community/Llama-3.1-8B-Instruct-fp16",
         "mlx-community/Llama-3.1-70B-Instruct-4bit",
+        // Llama 3.3
         "mlx-community/Llama-3.3-70B-Instruct-4bit",
+        // Mistral
         "mlx-community/Mistral-7B-Instruct-v0.3-4bit",
         "mlx-community/Mistral-7B-Instruct-v0.3-8bit",
         "mlx-community/Mistral-7B-Instruct-v0.3-fp16",
+        // Mixtral
         "mlx-community/Mixtral-8x7B-Instruct-v0.1-4bit",
+        // Ministral
         "mlx-community/Ministral-8B-Instruct-2410-4bit",
-        "mlx-community/gemma-2-2b-it",
-        "mlx-community/gemma-2-9b-it",
+        // Gemma 2
         "mlx-community/gemma-2-2b-it-4bit",
         "mlx-community/gemma-2-9b-it-4bit",
         "mlx-community/gemma-2-2b-it-8bit",
         "mlx-community/gemma-2-9b-it-8bit",
         "mlx-community/gemma-2-2b-it-fp16",
         "mlx-community/gemma-2-9b-it-fp16",
+        // Phi-3
         "mlx-community/Phi-3-mini-4k-instruct-4bit",
         "mlx-community/Phi-3-medium-4k-instruct-4bit",
         "mlx-community/Phi-3.5-mini-instruct-4bit",
         "mlx-community/Phi-3.5-mini-instruct-8bit",
         "mlx-community/Phi-3.5-mini-instruct-fp16",
-        "mlx-community/Qwen2.5-1.5B-Instruct-8bit",
-        "mlx-community/Qwen2.5-3B-Instruct-8bit",
-        "mlx-community/Qwen2.5-7B-Instruct-8bit",
-        "mlx-community/Qwen2.5-14B-Instruct-8bit",
-        "mlx-community/Qwen2.5-32B-Instruct-8bit",
-        "mlx-community/Qwen2.5-1.5B-Instruct-fp16",
-        "mlx-community/Qwen2.5-3B-Instruct-fp16",
-        "mlx-community/Qwen2.5-7B-Instruct-fp16",
-        "mlx-community/Qwen2.5-14B-Instruct-fp16",
-        "mlx-community/Qwen2.5-Coder-7B-Instruct-fp16",
-        "mlx-community/Qwen2.5-Coder-14B-Instruct-fp16",
     ]
 
     static let cloudASRModelPresets: [ASREngineOption: [String]] = [

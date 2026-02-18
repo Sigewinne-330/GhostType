@@ -147,6 +147,11 @@ final class EnginesSettingsPaneViewModel: ObservableObject {
         var isClearingLocalASRModelCache = false
         var localASRModelActionStatus = ""
         var localASRModelActionStatusIsError = false
+        // LLM Model Management
+        var isDownloadingLocalLLMModel = false
+        var isClearingLocalLLMModelCache = false
+        var localLLMModelActionStatus = ""
+        var localLLMModelActionStatusIsError = false
     }
 
     @Published var credentialDrafts = CredentialDrafts()
@@ -155,6 +160,10 @@ final class EnginesSettingsPaneViewModel: ObservableObject {
     @Published var localASRModelSearch = ""
     @Published var pendingDownloadASRModelID: String = ""
     @Published var downloadProgress = ModelDownloadProgress()
+    // LLM Model Management
+    @Published var localLLMModelSearch = ""
+    @Published var pendingDownloadLLMModelID: String = ""
+    @Published var llmDownloadProgress = ModelDownloadProgress()
 }
 
 @MainActor
@@ -646,20 +655,11 @@ struct EnginesSettingsPane: View {
             
             // Local Cache List
             Text("Local Cache:")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(.headline.weight(.semibold))
             
             ForEach(localInstalledASRModels, id: \.id) { descriptor in
                 HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(descriptor.displayName)
-                            .font(.caption)
-                        if let size = estimatedModelSize(for: descriptor) {
-                            Text(size)
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
+                    Text(descriptor.displayName)
                     Spacer()
                     Button("Delete") {
                         Task {
@@ -668,7 +668,6 @@ struct EnginesSettingsPane: View {
                         }
                     }
                     .buttonStyle(.bordered)
-                    .controlSize(.small)
                     .disabled(viewModel.probes.isDownloadingLocalASRModel || viewModel.probes.isClearingLocalASRModelCache)
                 }
             }
@@ -1413,7 +1412,8 @@ struct EnginesSettingsPane: View {
             LocalLLMInlineConfigView(
                 catalog: engine.localLLMCatalog,
                 engine: engine,
-                prefs: prefs
+                prefs: prefs,
+                viewModel: viewModel
             )
         case .openAI:
             cloudLLMCommonFields
