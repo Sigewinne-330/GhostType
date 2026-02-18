@@ -57,6 +57,7 @@ final class EnginesSettingsPaneViewModel: ObservableObject {
     @Published var keychain = KeychainUIState()
     @Published var probes = ProbeUIState()
     @Published var localASRModelSearch = ""
+    @Published var pendingDownloadASRModelID: String = ""
 }
 
 @MainActor
@@ -336,7 +337,7 @@ struct EnginesSettingsPane: View {
 
     @ViewBuilder
     private var localASRConfigurationView: some View {
-        Picker("Local ASR Provider", selection: $engine.localASRProvider) {
+        Picker("Provider", selection: $engine.localASRProvider) {
             ForEach(LocalASRProviderOption.allCases) { option in
                 Text(option.rawValue).tag(option)
             }
@@ -345,24 +346,25 @@ struct EnginesSettingsPane: View {
 
         switch engine.localASRProvider {
         case .mlxWhisper:
-            Toggle("Show advanced models (.en / 2bit / fp32)", isOn: $engine.localASRShowAdvancedModels)
-            TextField("Search local Whisper models", text: $viewModel.localASRModelSearch)
-                .textFieldStyle(.roundedBorder)
-
-            if localWhisperModels.isEmpty {
-                Text("No matching local Whisper model.")
+            let selectedDescriptor = engine.localASRModelDescriptor()
+            
+            // MARK: - Active Configuration Section
+            Text("Active Configuration")
+                .font(.headline.weight(.semibold))
+            
+            if localInstalledASRModels.isEmpty {
+                Text("No installed models. Use Model Manager below to download.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {
-                Picker("MLX Whisper Model", selection: $engine.selectedLocalASRModelID) {
-                    ForEach(localWhisperModels) { descriptor in
+                Picker("Select Model (installed only)", selection: $engine.selectedLocalASRModelID) {
+                    ForEach(localInstalledASRModels) { descriptor in
                         Text(descriptor.displayName).tag(descriptor.id)
                     }
                 }
                 .pickerStyle(.menu)
             }
-
-            let selectedDescriptor = engine.localASRModelDescriptor()
+            
             Menu {
                 ForEach(localASRPrecisionOptions(for: selectedDescriptor), id: \.self) { precision in
                     Button {
@@ -376,72 +378,147 @@ struct EnginesSettingsPane: View {
                     }
                 }
             } label: {
-                Label(
-                    prefs.ui(
-                        "选择模型量化：\(selectedDescriptor.precisionLabel)",
-                        "Choose quantization: \(selectedDescriptor.precisionLabel)"
-                    ),
-                    systemImage: "dial.medium"
-                )
+                HStack {
+                    Text("Choose quantization:")
+                    Text(selectedDescriptor.precisionLabel)
+                    Spacer()
+                    Image(systemName: "chevron.up.chevron.down")
+                }
             }
             .menuStyle(.borderlessButton)
-            Text("Repo: \(selectedDescriptor.hfRepo)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .textSelection(.enabled)
-            Text("Variant: \(selectedDescriptor.variantLabel)  •  Precision: \(selectedDescriptor.precisionLabel)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Text("Status: \(localWhisperStatus(for: selectedDescriptor))")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Text(prefs.ui("模型管理", "Model Management"))
-                .font(.subheadline.weight(.semibold))
-
+            
+            // Status Box
+            GroupBox {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Circle()
+                            .fill(localWhisperStatusColor(for: selectedDescriptor))
+                            .frame(width: 8, height: 8)
+                        Text("Status: \(localWhisperStatus(for: selectedDescriptor))")
+                            .font(.caption)
+                    }
+                    Text("Repo: \(selectedDescriptor.hfRepo)")
+                        .font(.caption)
+                        .textSelection(.enabled)
+                    Text("Variant: \(selectedDescriptor.variantLabel)")
+                        .font(.caption)
+                    Text("Precision: \(selectedDescriptor.precisionLabel)")
+                        .font(.caption)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding()
+            }
+            
+            
+            // MARK: - Model Manager Section
+            Text("Model Manager")
+                .font(.headline.weight(.semibold))
+            
+            TextField("Search Local Whisper Models", text: $viewModel.localASRModelSearch)
+                .textFieldStyle(.roundedBorder)
+            
+            HStack {
+                Button("Refresh List") {
+                    viewModel.localASRModelSearch = ""
+                }
+                .buttonStyle(.bordered)
+                
+                Spacer()
+                
+                Toggle("Show advanced models (.en / fp32)", isOn: $engine.localASRShowAdvancedModels)
+                    .toggleStyle(.checkbox)
+            }
+            
+            // Download New Model - separate from active model selection
+            Picker("Download New Model", selection: $viewModel.pendingDownloadASRModelID) {
+                ForEach(downloadableLocalASRModels) { descriptor in
+                    HStack {
+                        Text(descriptor.displayName)
+                        if hasLocalWhisperCache(for: descriptor.hfRepo) {
+                            Text("(installed)")
+                        }
+                    }.tag(descriptor.id)
+                }
+            }
+            .pickerStyle(.menu)
+            .onAppear {
+                if viewModel.pendingDownloadASRModelID.isEmpty {
+                    viewModel.pendingDownloadASRModelID = downloadableLocalASRModels.first?.id ?? ""
+                }
+            }
+            
             HStack(spacing: 8) {
                 Button(
                     viewModel.probes.isDownloadingLocalASRModel
-                        ? prefs.ui("下载中...", "Downloading...")
-                        : prefs.ui("下载并预热当前模型", "Download & Warm Up")
+                        ? "Downloading..."
+                        : "Download Model"
                 ) {
                     Task {
-                        await downloadSelectedLocalASRModel()
+                        await downloadPendingLocalASRModel()
                     }
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(viewModel.probes.isDownloadingLocalASRModel || viewModel.probes.isClearingLocalASRModelCache)
-
-                Button(
-                    viewModel.probes.isClearingLocalASRModelCache
-                        ? prefs.ui("清理中...", "Clearing...")
-                        : prefs.ui("清理当前模型缓存", "Clear Model Cache"),
-                    role: .destructive
-                ) {
-                    Task {
-                        await clearSelectedLocalASRModelCache()
-                    }
-                }
-                .buttonStyle(.bordered)
-                .disabled(viewModel.probes.isDownloadingLocalASRModel || viewModel.probes.isClearingLocalASRModelCache)
-
-                Button(prefs.ui("在 Finder 中显示缓存", "Reveal Cache in Finder")) {
-                    revealSelectedLocalASRModelCacheInFinder()
-                }
-                .buttonStyle(.bordered)
-                .disabled(viewModel.probes.isDownloadingLocalASRModel || viewModel.probes.isClearingLocalASRModelCache)
+                .disabled(viewModel.probes.isDownloadingLocalASRModel || viewModel.probes.isClearingLocalASRModelCache || viewModel.pendingDownloadASRModelID.isEmpty)
             }
-
+            
+            // Progress / Status
             if !viewModel.probes.localASRModelActionStatus.isEmpty {
                 Text(viewModel.probes.localASRModelActionStatus)
                     .font(.caption)
                     .foregroundStyle(viewModel.probes.localASRModelActionStatusIsError ? Color.red : Color.secondary)
                     .textSelection(.enabled)
             }
-
+            
+            // Local Cache List
+            Text("Local Cache:")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            
+            ForEach(localInstalledASRModels, id: \.id) { descriptor in
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(descriptor.displayName)
+                            .font(.caption)
+                        if let size = estimatedModelSize(for: descriptor) {
+                            Text(size)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Spacer()
+                    Button("Delete") {
+                        Task {
+                            engine.selectedLocalASRModelID = descriptor.id
+                            await clearSelectedLocalASRModelCache()
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .disabled(viewModel.probes.isDownloadingLocalASRModel || viewModel.probes.isClearingLocalASRModelCache)
+                }
+            }
+            
+            // Cache Actions
+            HStack(spacing: 8) {
+                Button("Reveal Cache in Finder") {
+                    revealSelectedLocalASRModelCacheInFinder()
+                }
+                .buttonStyle(.bordered)
+                .disabled(viewModel.probes.isDownloadingLocalASRModel || viewModel.probes.isClearingLocalASRModelCache)
+                
+                Button("Clear Model Cache") {
+                    Task {
+                        await clearSelectedLocalASRModelCache()
+                    }
+                }
+                .buttonStyle(.bordered)
+                .disabled(viewModel.probes.isDownloadingLocalASRModel || viewModel.probes.isClearingLocalASRModelCache)
+            }
+            
             Button(
                 engine.isRefreshingLocalASRModelCatalog
-                    ? prefs.ui("刷新中...", "Refreshing...")
-                    : prefs.ui("刷新模型目录（Hugging Face）", "Refresh Catalog (Hugging Face)")
+                    ? "Refreshing..."
+                    : "Refresh Catalog (Hugging Face)"
             ) {
                 Task {
                     await engine.refreshLocalASRModelCatalog()
@@ -449,7 +526,7 @@ struct EnginesSettingsPane: View {
             }
             .buttonStyle(.bordered)
             .disabled(engine.isRefreshingLocalASRModelCatalog)
-
+            
             if !engine.localASRModelCatalogStatus.isEmpty {
                 Text(engine.localASRModelCatalogStatus)
                     .font(.caption)
@@ -476,6 +553,46 @@ struct EnginesSettingsPane: View {
             return [engine.localASRModelDescriptor()]
         }
         return filtered
+    }
+
+    private var downloadableLocalASRModels: [LocalASRModelDescriptor] {
+        let all = LocalASRModelCatalog.filteredModels(
+            in: engine.localASRModelDescriptors,
+            includeAdvanced: engine.localASRShowAdvancedModels,
+            searchQuery: ""
+        )
+        return all
+    }
+
+    private var localInstalledASRModels: [LocalASRModelDescriptor] {
+        engine.localASRModelDescriptors.filter { descriptor in
+            hasLocalWhisperCache(for: descriptor.hfRepo)
+        }
+    }
+
+    private func localWhisperStatusColor(for descriptor: LocalASRModelDescriptor) -> Color {
+        let status = localWhisperStatus(for: descriptor)
+        switch status {
+        case "Ready":
+            return .green
+        case "Downloaded":
+            return .orange
+        default:
+            return .gray
+        }
+    }
+
+    private func estimatedModelSize(for descriptor: LocalASRModelDescriptor) -> String? {
+        let sizes: [LocalASRModelFamily: [LocalASRModelPrecision: String]] = [
+            .tiny: [.default: "~40MB", .bit8: "~20MB", .bit4: "~12MB", .fp32: "~150MB"],
+            .base: [.default: "~75MB", .bit8: "~40MB", .bit4: "~25MB", .fp32: "~300MB"],
+            .small: [.default: "~150MB", .bit8: "~75MB", .bit4: "~45MB", .fp32: "~600MB"],
+            .medium: [.default: "~500MB", .bit8: "~250MB", .bit4: "~150MB", .fp32: "~2GB"],
+            .large: [.default: "~1.5GB", .bit8: "~750MB", .bit4: "~450MB", .fp32: "~6GB"],
+            .largeV2: [.default: "~1.5GB", .bit8: "~750MB", .bit4: "~450MB", .fp32: "~6GB"],
+            .largeV3: [.default: "~1.5GB", .bit8: "~750MB", .bit4: "~450MB", .fp32: "~6GB"],
+        ]
+        return sizes[descriptor.family]?[descriptor.precision]
     }
 
     @ViewBuilder
@@ -791,6 +908,31 @@ struct EnginesSettingsPane: View {
                 "模型下载失败：\(error.localizedDescription)",
                 "Model download failed: \(error.localizedDescription)"
             )
+        }
+    }
+
+    private func downloadPendingLocalASRModel() async {
+        guard !viewModel.probes.isDownloadingLocalASRModel else { return }
+        let modelID = viewModel.pendingDownloadASRModelID
+        guard !modelID.isEmpty else { return }
+        
+        let descriptor = engine.localASRModelDescriptor(for: modelID)
+        viewModel.probes.isDownloadingLocalASRModel = true
+        viewModel.probes.localASRModelActionStatusIsError = false
+        viewModel.probes.localASRModelActionStatus = "Downloading: \(descriptor.displayName)"
+        defer { viewModel.probes.isDownloadingLocalASRModel = false }
+
+        do {
+            try await ensureBackendReadyForModelManagement(asrModel: descriptor.hfRepo)
+            try await warmupLocalASRModelDownload(asrModel: descriptor.hfRepo)
+            let downloaded = hasLocalWhisperCache(for: descriptor.hfRepo)
+            viewModel.probes.localASRModelActionStatus = downloaded
+                ? "Model downloaded: \(descriptor.displayName)"
+                : "Download completed, but local cache not detected."
+            viewModel.probes.localASRModelActionStatusIsError = !downloaded
+        } catch {
+            viewModel.probes.localASRModelActionStatusIsError = true
+            viewModel.probes.localASRModelActionStatus = "Download failed: \(error.localizedDescription)"
         }
     }
 
