@@ -227,14 +227,30 @@ extension InferenceCoordinator {
         activeInferenceID = inferenceID
         activeInferenceAudioURL = audioURL
         isInferenceRunning = true
-        armInferenceWatchdog(
-            inferenceID: inferenceID,
-            timeout: didReceiveFirstToken ? Timeouts.stallAfterToken : Timeouts.firstToken,
-            reason: "Inference timeout. Please try again."
-        )
+        // Note: For routes that require the local backend, we arm the watchdog INSIDE execute() so
+        // that backend startup time (model loading, health check) does not count against the
+        // first-token budget. For cloud-only routes the backend check is skipped and execute() is
+        // called synchronously, so arming here vs. inside execute() is equivalent.
+        if !routePlan.requiresLocalBackend {
+            armInferenceWatchdog(
+                inferenceID: inferenceID,
+                timeout: didReceiveFirstToken ? Timeouts.stallAfterToken : Timeouts.firstToken,
+                reason: "Inference timeout. Please try again."
+            )
+        }
 
         let execute = { [weak self] in
             guard let self else { return }
+            // Arm (or re-arm) the watchdog now that the backend is confirmed healthy.
+            // Local routes get a longer first-token budget because ASR + LLM loading can take
+            // significantly more than 60 s on large models.
+            if routePlan.requiresLocalBackend {
+                self.armInferenceWatchdog(
+                    inferenceID: inferenceID,
+                    timeout: self.didReceiveFirstToken ? Timeouts.stallAfterToken : Timeouts.firstTokenLocal,
+                    reason: "Local inference timeout. Please try again."
+                )
+            }
             if mode == .ask {
                 self.resultOverlay.showAskPending(
                     anchorFrame: self.hudPanel.frame,
