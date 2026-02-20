@@ -24,7 +24,7 @@ final class EngineConfigTests: XCTestCase {
         XCTAssertEqual(config.asrModel, LocalASRModelCatalog.defaultModelID)
         XCTAssertEqual(config.localHTTPASRBaseURL, LocalASRModelCatalog.defaultLocalHTTPBaseURL)
         XCTAssertEqual(config.localHTTPASRModelName, LocalASRModelCatalog.defaultLocalHTTPModelName)
-        XCTAssertEqual(config.llmModel, "mlx-community/Qwen2.5-1.5B-Instruct-4bit")
+        XCTAssertEqual(config.llmModel, "mlx-community/gemma-3-270m-it-4bit")
         XCTAssertEqual(config.deepgram.transcriptionMode, .batch)
         XCTAssertEqual(config.deepgram.region, .standard)
         XCTAssertTrue(config.deepgram.smartFormat)
