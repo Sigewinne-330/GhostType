@@ -384,6 +384,10 @@ class ResidentModelRuntime:
         self._llm_tokenizer: Any | None = None
 
         self._lock = threading.RLock()
+        # Serialises end-to-end inference requests (ASR + LLM).  Kept separate
+        # from _lock so that health(), release_models(), and the watchdog thread
+        # can always acquire _lock quickly, even while inference is running.
+        self._inference_lock = threading.Lock()
         self._generation_lock = threading.Lock()
         self._shutdown = threading.Event()
         self._watchdog_thread: threading.Thread | None = None
@@ -2311,9 +2315,10 @@ class ResidentModelRuntime:
         audio_path = normalize_audio_path(req.audio_path)
         max_tokens = self._clamp_max_tokens(req.max_tokens)
         audio_config = self._audio_config_from_request(req)
-        with self._lock:
-            self._apply_model_overrides(req.asr_model, req.llm_model)
-            self._touch()
+        with self._inference_lock:
+            with self._lock:
+                self._apply_model_overrides(req.asr_model, req.llm_model)
+                self._touch()
             asr_result = self._transcribe_audio(
                 audio_path,
                 language="auto",
@@ -2326,6 +2331,8 @@ class ResidentModelRuntime:
                 self._resolve_system_prompt(req.system_prompt, self._dictate_system_prompt())
             )
             user_prompt = self._dictate_user_prompt(raw_text)
+            with self._lock:
+                self._ensure_llm_loaded()
             output, t_llm = self._run_llm_sync(
                 messages=[
                     {"role": "system", "content": prompt},
@@ -2348,9 +2355,10 @@ class ResidentModelRuntime:
         audio_path = normalize_audio_path(req.audio_path)
         max_tokens = self._clamp_max_tokens(req.max_tokens)
         audio_config = self._audio_config_from_request(req)
-        with self._lock:
-            self._apply_model_overrides(req.asr_model, req.llm_model)
-            self._touch()
+        with self._inference_lock:
+            with self._lock:
+                self._apply_model_overrides(req.asr_model, req.llm_model)
+                self._touch()
             asr_result = self._transcribe_audio(
                 audio_path,
                 language="auto",
@@ -2363,8 +2371,9 @@ class ResidentModelRuntime:
                 self._resolve_system_prompt(req.system_prompt, self._dictate_system_prompt())
             )
             user_prompt = self._dictate_user_prompt(raw_text)
-            # Ensure model is loaded while we still hold the lock.
-            self._ensure_llm_loaded()
+            with self._lock:
+                # Ensure model is loaded before releasing the inference lock.
+                self._ensure_llm_loaded()
             messages = [
                 {"role": "system", "content": prompt},
                 {"role": "user", "content": user_prompt},
@@ -2386,9 +2395,10 @@ class ResidentModelRuntime:
         audio_path = normalize_audio_path(req.audio_path)
         max_tokens = self._clamp_max_tokens(req.max_tokens)
         audio_config = self._audio_config_from_request(req)
-        with self._lock:
-            self._apply_model_overrides(req.asr_model, req.llm_model)
-            self._touch()
+        with self._inference_lock:
+            with self._lock:
+                self._apply_model_overrides(req.asr_model, req.llm_model)
+                self._touch()
             asr_result = self._transcribe_audio(
                 audio_path,
                 language="auto",
@@ -2406,6 +2416,8 @@ class ResidentModelRuntime:
                 question=question,
                 search_text=search_text,
             )
+            with self._lock:
+                self._ensure_llm_loaded()
             output, t_llm = self._run_llm_sync(
                 messages=[
                     {"role": "system", "content": prompt},
@@ -2430,9 +2442,10 @@ class ResidentModelRuntime:
         audio_path = normalize_audio_path(req.audio_path)
         max_tokens = self._clamp_max_tokens(req.max_tokens)
         audio_config = self._audio_config_from_request(req)
-        with self._lock:
-            self._apply_model_overrides(req.asr_model, req.llm_model)
-            self._touch()
+        with self._inference_lock:
+            with self._lock:
+                self._apply_model_overrides(req.asr_model, req.llm_model)
+                self._touch()
             asr_result = self._transcribe_audio(
                 audio_path,
                 language="auto",
@@ -2450,8 +2463,9 @@ class ResidentModelRuntime:
                 question=question,
                 search_text=search_text,
             )
-            # Ensure model is loaded while we still hold the lock.
-            self._ensure_llm_loaded()
+            with self._lock:
+                # Ensure model is loaded before releasing the inference lock.
+                self._ensure_llm_loaded()
             messages = [
                 {"role": "system", "content": prompt},
                 {"role": "user", "content": question_pack},
@@ -2475,9 +2489,10 @@ class ResidentModelRuntime:
         audio_path = normalize_audio_path(req.audio_path)
         max_tokens = self._clamp_max_tokens(req.max_tokens)
         audio_config = self._audio_config_from_request(req)
-        with self._lock:
-            self._apply_model_overrides(req.asr_model, req.llm_model)
-            self._touch()
+        with self._inference_lock:
+            with self._lock:
+                self._apply_model_overrides(req.asr_model, req.llm_model)
+                self._touch()
             asr_result = self._transcribe_audio(
                 audio_path,
                 language="auto",
@@ -2490,6 +2505,8 @@ class ResidentModelRuntime:
                 self._resolve_system_prompt(req.system_prompt, self._translate_system_prompt(req.target_language))
             )
             user_prompt = self._translate_user_prompt(raw_text)
+            with self._lock:
+                self._ensure_llm_loaded()
             output, t_llm = self._run_llm_sync(
                 messages=[
                     {"role": "system", "content": prompt},
@@ -2512,9 +2529,10 @@ class ResidentModelRuntime:
         audio_path = normalize_audio_path(req.audio_path)
         max_tokens = self._clamp_max_tokens(req.max_tokens)
         audio_config = self._audio_config_from_request(req)
-        with self._lock:
-            self._apply_model_overrides(req.asr_model, req.llm_model)
-            self._touch()
+        with self._inference_lock:
+            with self._lock:
+                self._apply_model_overrides(req.asr_model, req.llm_model)
+                self._touch()
             asr_result = self._transcribe_audio(
                 audio_path,
                 language="auto",
@@ -2527,8 +2545,9 @@ class ResidentModelRuntime:
                 self._resolve_system_prompt(req.system_prompt, self._translate_system_prompt(req.target_language))
             )
             user_prompt = self._translate_user_prompt(raw_text)
-            # Ensure model is loaded while we still hold the lock.
-            self._ensure_llm_loaded()
+            with self._lock:
+                # Ensure model is loaded before releasing the inference lock.
+                self._ensure_llm_loaded()
             messages = [
                 {"role": "system", "content": prompt},
                 {"role": "user", "content": user_prompt},
@@ -2549,9 +2568,10 @@ class ResidentModelRuntime:
     def run_asr_chunk(self, req: ASRChunkRequest) -> ASRChunkResponse:
         audio_path = normalize_audio_path(req.audio_path)
         audio_config = self._audio_config_from_request(req)
-        with self._lock:
-            self._apply_model_overrides(req.asr_model, req.llm_model)
-            self._touch()
+        with self._inference_lock:
+            with self._lock:
+                self._apply_model_overrides(req.asr_model, req.llm_model)
+                self._touch()
             asr_result = self._transcribe_audio(
                 audio_path,
                 language="auto",
@@ -2574,9 +2594,10 @@ class ResidentModelRuntime:
         max_tokens = self._clamp_max_tokens(req.max_tokens)
 
         def event_iterator():
-            with self._lock:
-                self._apply_model_overrides(req.asr_model, req.llm_model)
-                self._touch()
+            with self._inference_lock:
+                with self._lock:
+                    self._apply_model_overrides(req.asr_model, req.llm_model)
+                    self._touch()
 
                 extra_timings = {
                     str(k): float(v)
@@ -2622,7 +2643,8 @@ class ResidentModelRuntime:
                     web_sources = []
                     mode_name = "translate"
 
-                self._ensure_llm_loaded()
+                with self._lock:
+                    self._ensure_llm_loaded()
                 messages = [
                     {"role": "system", "content": prompt},
                     {"role": "user", "content": user_prompt},
