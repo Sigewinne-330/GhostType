@@ -76,6 +76,7 @@ final class BackendManager {
 
     private struct LaunchConfig: Equatable {
         let asrModel: String
+        let asrProvider: String
         let llmModel: String
         let idleTimeoutSeconds: Int?
         
@@ -102,6 +103,7 @@ final class BackendManager {
 
     func startIfNeeded(
         asrModel: String,
+        asrProvider: String = "mlx_whisper",
         llmModel: String,
         idleTimeoutSeconds: Int?,
         completion: @escaping (Result<Void, Error>) -> Void
@@ -110,6 +112,7 @@ final class BackendManager {
             self.appLogger.log("Backend start requested.")
             let requestedConfig = LaunchConfig(
                 asrModel: asrModel,
+                asrProvider: asrProvider,
                 llmModel: llmModel,
                 idleTimeoutSeconds: idleTimeoutSeconds
             )
@@ -633,6 +636,8 @@ final class BackendManager {
             context.appSupportDir.appendingPathComponent("state").path,
             "--asr-model",
             config.asrModel,
+            "--asr-provider",
+            config.asrProvider,
             "--llm-model",
             config.llmModel,
             "--idle-timeout",
@@ -640,6 +645,15 @@ final class BackendManager {
         ]
         serviceProcess.currentDirectoryURL = context.appSupportDir
         serviceProcess.qualityOfService = .background
+
+        // Pass bundled ffmpeg path to backend via environment variable.
+        // Falls back to system ffmpeg if bundle resource is unavailable.
+        var env = ProcessInfo.processInfo.environment
+        if let bundledFFmpeg = Bundle.main.url(forResource: "ffmpeg", withExtension: nil),
+           FileManager.default.isExecutableFile(atPath: bundledFFmpeg.path) {
+            env["GHOSTTYPE_FFMPEG_PATH"] = bundledFFmpeg.path
+        }
+        serviceProcess.environment = env
 
         let outPipe = Pipe()
         let errPipe = Pipe()

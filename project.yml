@@ -23,6 +23,8 @@ targets:
         buildPhase: resources
       - path: python/install_webrtc_apm_macos.sh
         buildPhase: resources
+      - path: python/bin/ffmpeg
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.codeandchill.ghosttype

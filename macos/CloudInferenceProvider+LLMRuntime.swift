@@ -351,6 +351,34 @@ extension CloudInferenceProvider {
                 maxInFlight: maxInFlight,
                 streamingEnabled: streamingEnabled
             )
+        case .ollama:
+            let baseURL = try normalizedBaseURL(configuredBase.isEmpty ? LLMEngineOption.ollama.defaultBaseURL : configuredBase)
+            let model = modelInput.isEmpty ? LLMEngineOption.ollama.defaultModelName : modelInput
+            return makeOpenAIStyleLLMRuntime(
+                providerID: "ollama",
+                providerName: "Ollama",
+                baseURL: baseURL,
+                modelName: model,
+                apiKey: "",
+                timeoutSeconds: timeoutSeconds,
+                maxRetries: maxRetries,
+                maxInFlight: maxInFlight,
+                streamingEnabled: streamingEnabled
+            )
+        case .lmStudio:
+            let baseURL = try normalizedBaseURL(configuredBase.isEmpty ? LLMEngineOption.lmStudio.defaultBaseURL : configuredBase)
+            let model = modelInput.isEmpty ? LLMEngineOption.lmStudio.defaultModelName : modelInput
+            return makeOpenAIStyleLLMRuntime(
+                providerID: "lm_studio",
+                providerName: "LM Studio",
+                baseURL: baseURL,
+                modelName: model,
+                apiKey: "",
+                timeoutSeconds: timeoutSeconds,
+                maxRetries: maxRetries,
+                maxInFlight: maxInFlight,
+                streamingEnabled: streamingEnabled
+            )
         case .localMLX:
             throw CloudInferenceError.unsupportedLLMEngine
         }

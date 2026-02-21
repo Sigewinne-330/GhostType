@@ -421,6 +421,17 @@ enum EngineSettingsCatalog {
         "mlx-community/Mixtral-8x7B-Instruct-v0.1-4bit",
         // Ministral
         "mlx-community/Ministral-8B-Instruct-2410-4bit",
+        // Gemma 3
+        "mlx-community/gemma-3-270m-it-4bit",
+        "mlx-community/gemma-3-1b-it-4bit",
+        "mlx-community/gemma-3-4b-it-4bit",
+        "mlx-community/gemma-3-12b-it-4bit",
+        "mlx-community/gemma-3-1b-it-8bit",
+        "mlx-community/gemma-3-4b-it-8bit",
+        "mlx-community/gemma-3-12b-it-8bit",
+        "mlx-community/gemma-3-1b-it-bf16",
+        "mlx-community/gemma-3-4b-it-bf16",
+        "mlx-community/gemma-3-12b-it-bf16",
         // Gemma 2
         "mlx-community/gemma-2-2b-it-4bit",
         "mlx-community/gemma-2-9b-it-4bit",
@@ -437,7 +448,6 @@ enum EngineSettingsCatalog {
     ]
 
     static let cloudASRModelPresets: [ASREngineOption: [String]] = [
-        .localHTTPOpenAIAudio: ["whisper-1", "transcribe-1"],
         .openAIWhisper: ["whisper-1", "gpt-4o-mini-transcribe", "gpt-4o-transcribe"],
         .deepgram: ["nova-3", "nova-3-general", "nova-2", "nova-2-general"],
         .assemblyAI: ["best", "nano"],
@@ -455,5 +465,7 @@ enum EngineSettingsCatalog {
         .gemini: ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash"],
         .deepSeek: ["deepseek-chat", "deepseek-reasoner"],
         .groq: ["llama-3.1-70b-versatile", "llama-3.3-70b-versatile", "mixtral-8x7b-32768"],
+        .ollama: ["llama3.2", "llama3.1", "mistral", "gemma3", "qwen2.5", "deepseek-r1", "phi4"],
+        .lmStudio: ["local-model"],
     ]
 }

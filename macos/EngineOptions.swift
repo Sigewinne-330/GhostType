@@ -65,6 +65,8 @@ enum LLMEngineOption: String, CaseIterable, Identifiable, Codable {
     case gemini = "Cloud Google Gemini API"
     case deepSeek = "Cloud DeepSeek API"
     case groq = "Cloud Groq API"
+    case ollama = "Local Ollama"
+    case lmStudio = "Local LM Studio"
 
     var id: String { rawValue }
 
@@ -88,6 +90,10 @@ enum LLMEngineOption: String, CaseIterable, Identifiable, Codable {
             return "https://api.deepseek.com/v1"
         case .groq:
             return "https://api.groq.com/openai/v1"
+        case .ollama:
+            return "http://127.0.0.1:11434/v1"
+        case .lmStudio:
+            return "http://127.0.0.1:1234/v1"
         }
     }
 
@@ -111,6 +117,10 @@ enum LLMEngineOption: String, CaseIterable, Identifiable, Codable {
             return "deepseek-chat"
         case .groq:
             return "llama-3.1-70b-versatile"
+        case .ollama:
+            return "llama3.2"
+        case .lmStudio:
+            return "local-model"
         }
     }
 }

@@ -393,6 +393,10 @@ class ResidentModelRuntime:
         self._llm_tokenizer: Any | None = None
 
         self._lock = threading.RLock()
+        # Serialises end-to-end inference requests (ASR + LLM).  Kept separate
+        # from _lock so that health(), release_models(), and the watchdog thread
+        # can always acquire _lock quickly, even while inference is running.
+        self._inference_lock = threading.Lock()
         self._generation_lock = threading.Lock()
         self._shutdown = threading.Event()
         self._watchdog_thread: threading.Thread | None = None
@@ -1018,13 +1022,30 @@ class ResidentModelRuntime:
         if isinstance(exc, ASRRequestError):
             raise exc
         if isinstance(exc, FileNotFoundError):
+            # Check whether the missing file looks like a model file (config.json, *.safetensors, etc.)
+            # vs. a missing ffmpeg executable.
+            err_str = str(exc)
+            is_model_file = (
+                "huggingface" in err_str
+                or "config.json" in err_str
+                or ".safetensors" in err_str
+                or ".gguf" in err_str
+            )
+            if is_model_file:
+                raise ASRRequestError(
+                    error_code="asr_model_not_found",
+                    human_message=(
+                        "ASR 模型文件缺失，请在设置中重新下载对应模型后重试。"
+                    ),
+                    technical_message=err_str,
+                ) from exc
             raise ASRRequestError(
                 error_code="asr_ffmpeg_not_found",
                 human_message=(
                     "本地 ASR 需要 ffmpeg 解码当前音频，但未找到可执行文件。"
                     "请开启内置 ffmpeg 选项或安装系统 ffmpeg。"
                 ),
-                technical_message=str(exc),
+                technical_message=err_str,
             ) from exc
         if isinstance(exc, subprocess.CalledProcessError):
             raise ASRRequestError(
@@ -1061,7 +1082,17 @@ class ResidentModelRuntime:
     def _apply_model_overrides(self, asr_model: str | None, llm_model: str | None) -> None:
         changed_llm = False
         if asr_model and asr_model != self.asr_model_id:
-            self.asr_model_id = asr_model
+            # Only switch ASR model if it is actually cached locally; otherwise keep
+            # the currently-loaded model to avoid FileNotFoundError at transcription time.
+            cache_dir = Path.home() / ".cache" / "huggingface" / "hub" / f"models--{asr_model.replace('/', '--')}"
+            if cache_dir.exists():
+                self.asr_model_id = asr_model
+            else:
+                print(
+                    f"[model-override] ASR model '{asr_model}' not in local cache; "
+                    f"keeping current model '{self.asr_model_id}'.",
+                    flush=True,
+                )
         if llm_model and llm_model != self.llm_model_id:
             self.llm_model_id = llm_model
             changed_llm = True
@@ -2347,9 +2378,10 @@ class ResidentModelRuntime:
         audio_path = normalize_audio_path(req.audio_path)
         max_tokens = self._clamp_max_tokens(req.max_tokens)
         audio_config = self._audio_config_from_request(req)
-        with self._lock:
-            self._apply_model_overrides(req.asr_model, req.llm_model)
-            self._touch()
+        with self._inference_lock:
+            with self._lock:
+                self._apply_model_overrides(req.asr_model, req.llm_model)
+                self._touch()
             asr_result = self._transcribe_audio(
                 audio_path,
                 language="auto",
@@ -2362,6 +2394,8 @@ class ResidentModelRuntime:
                 self._resolve_system_prompt(req.system_prompt, self._dictate_system_prompt())
             )
             user_prompt = self._dictate_user_prompt(raw_text)
+            with self._lock:
+                self._ensure_llm_loaded()
             output, t_llm = self._run_llm_sync(
                 messages=[
                     {"role": "system", "content": prompt},
@@ -2384,9 +2418,10 @@ class ResidentModelRuntime:
         audio_path = normalize_audio_path(req.audio_path)
         max_tokens = self._clamp_max_tokens(req.max_tokens)
         audio_config = self._audio_config_from_request(req)
-        with self._lock:
-            self._apply_model_overrides(req.asr_model, req.llm_model)
-            self._touch()
+        with self._inference_lock:
+            with self._lock:
+                self._apply_model_overrides(req.asr_model, req.llm_model)
+                self._touch()
             asr_result = self._transcribe_audio(
                 audio_path,
                 language="auto",
@@ -2399,8 +2434,9 @@ class ResidentModelRuntime:
                 self._resolve_system_prompt(req.system_prompt, self._dictate_system_prompt())
             )
             user_prompt = self._dictate_user_prompt(raw_text)
-            # Ensure model is loaded while we still hold the lock.
-            self._ensure_llm_loaded()
+            with self._lock:
+                # Ensure model is loaded before releasing the inference lock.
+                self._ensure_llm_loaded()
             messages = [
                 {"role": "system", "content": prompt},
                 {"role": "user", "content": user_prompt},
@@ -2422,9 +2458,10 @@ class ResidentModelRuntime:
         audio_path = normalize_audio_path(req.audio_path)
         max_tokens = self._clamp_max_tokens(req.max_tokens)
         audio_config = self._audio_config_from_request(req)
-        with self._lock:
-            self._apply_model_overrides(req.asr_model, req.llm_model)
-            self._touch()
+        with self._inference_lock:
+            with self._lock:
+                self._apply_model_overrides(req.asr_model, req.llm_model)
+                self._touch()
             asr_result = self._transcribe_audio(
                 audio_path,
                 language="auto",
@@ -2442,6 +2479,8 @@ class ResidentModelRuntime:
                 question=question,
                 search_text=search_text,
             )
+            with self._lock:
+                self._ensure_llm_loaded()
             output, t_llm = self._run_llm_sync(
                 messages=[
                     {"role": "system", "content": prompt},
@@ -2466,9 +2505,10 @@ class ResidentModelRuntime:
         audio_path = normalize_audio_path(req.audio_path)
         max_tokens = self._clamp_max_tokens(req.max_tokens)
         audio_config = self._audio_config_from_request(req)
-        with self._lock:
-            self._apply_model_overrides(req.asr_model, req.llm_model)
-            self._touch()
+        with self._inference_lock:
+            with self._lock:
+                self._apply_model_overrides(req.asr_model, req.llm_model)
+                self._touch()
             asr_result = self._transcribe_audio(
                 audio_path,
                 language="auto",
@@ -2486,8 +2526,9 @@ class ResidentModelRuntime:
                 question=question,
                 search_text=search_text,
             )
-            # Ensure model is loaded while we still hold the lock.
-            self._ensure_llm_loaded()
+            with self._lock:
+                # Ensure model is loaded before releasing the inference lock.
+                self._ensure_llm_loaded()
             messages = [
                 {"role": "system", "content": prompt},
                 {"role": "user", "content": question_pack},
@@ -2511,9 +2552,10 @@ class ResidentModelRuntime:
         audio_path = normalize_audio_path(req.audio_path)
         max_tokens = self._clamp_max_tokens(req.max_tokens)
         audio_config = self._audio_config_from_request(req)
-        with self._lock:
-            self._apply_model_overrides(req.asr_model, req.llm_model)
-            self._touch()
+        with self._inference_lock:
+            with self._lock:
+                self._apply_model_overrides(req.asr_model, req.llm_model)
+                self._touch()
             asr_result = self._transcribe_audio(
                 audio_path,
                 language="auto",
@@ -2526,6 +2568,8 @@ class ResidentModelRuntime:
                 self._resolve_system_prompt(req.system_prompt, self._translate_system_prompt(req.target_language))
             )
             user_prompt = self._translate_user_prompt(raw_text)
+            with self._lock:
+                self._ensure_llm_loaded()
             output, t_llm = self._run_llm_sync(
                 messages=[
                     {"role": "system", "content": prompt},
@@ -2548,9 +2592,10 @@ class ResidentModelRuntime:
         audio_path = normalize_audio_path(req.audio_path)
         max_tokens = self._clamp_max_tokens(req.max_tokens)
         audio_config = self._audio_config_from_request(req)
-        with self._lock:
-            self._apply_model_overrides(req.asr_model, req.llm_model)
-            self._touch()
+        with self._inference_lock:
+            with self._lock:
+                self._apply_model_overrides(req.asr_model, req.llm_model)
+                self._touch()
             asr_result = self._transcribe_audio(
                 audio_path,
                 language="auto",
@@ -2563,8 +2608,9 @@ class ResidentModelRuntime:
                 self._resolve_system_prompt(req.system_prompt, self._translate_system_prompt(req.target_language))
             )
             user_prompt = self._translate_user_prompt(raw_text)
-            # Ensure model is loaded while we still hold the lock.
-            self._ensure_llm_loaded()
+            with self._lock:
+                # Ensure model is loaded before releasing the inference lock.
+                self._ensure_llm_loaded()
             messages = [
                 {"role": "system", "content": prompt},
                 {"role": "user", "content": user_prompt},
@@ -2585,9 +2631,10 @@ class ResidentModelRuntime:
     def run_asr_chunk(self, req: ASRChunkRequest) -> ASRChunkResponse:
         audio_path = normalize_audio_path(req.audio_path)
         audio_config = self._audio_config_from_request(req)
-        with self._lock:
-            self._apply_model_overrides(req.asr_model, req.llm_model)
-            self._touch()
+        with self._inference_lock:
+            with self._lock:
+                self._apply_model_overrides(req.asr_model, req.llm_model)
+                self._touch()
             asr_result = self._transcribe_audio(
                 audio_path,
                 language="auto",
@@ -2610,9 +2657,10 @@ class ResidentModelRuntime:
         max_tokens = self._clamp_max_tokens(req.max_tokens)
 
         def event_iterator():
-            with self._lock:
-                self._apply_model_overrides(req.asr_model, req.llm_model)
-                self._touch()
+            with self._inference_lock:
+                with self._lock:
+                    self._apply_model_overrides(req.asr_model, req.llm_model)
+                    self._touch()
 
                 extra_timings = {
                     str(k): float(v)
@@ -2658,7 +2706,8 @@ class ResidentModelRuntime:
                     web_sources = []
                     mode_name = "translate"
 
-                self._ensure_llm_loaded()
+                with self._lock:
+                    self._ensure_llm_loaded()
                 messages = [
                     {"role": "system", "content": prompt},
                     {"role": "user", "content": user_prompt},
@@ -3020,6 +3069,20 @@ def create_app(runtime: ResidentModelRuntime) -> FastAPI:
             },
         )
 
+    @app.post("/local_llm/delete")
+    def delete_local_llm(body: dict[str, Any]) -> dict[str, Any]:
+        """Delete a locally cached HuggingFace model by repo_id."""
+        repo_id = body.get("repo_id", "").strip()
+        if not repo_id:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=400, detail="repo_id is required")
+        cache_dir = Path.home() / ".cache" / "huggingface" / "hub" / f"models--{repo_id.replace('/', '--')}"
+        if not cache_dir.exists():
+            return {"ok": True, "message": f"Cache not found for {repo_id}, nothing to delete."}
+        import shutil
+        shutil.rmtree(cache_dir)
+        return {"ok": True, "message": f"Deleted cache for {repo_id}"}
+
     return app
 
 
@@ -3029,6 +3092,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--state-dir", default=str(Path(__file__).parent / "state"))
     parser.add_argument("--asr-model", default=DEFAULT_ASR_MODEL)
+    parser.add_argument("--asr-provider", default="mlx_whisper")
     parser.add_argument("--llm-model", default=DEFAULT_LLM_MODEL)
     parser.add_argument("--idle-timeout", type=int, default=300)
     return parser.parse_args()

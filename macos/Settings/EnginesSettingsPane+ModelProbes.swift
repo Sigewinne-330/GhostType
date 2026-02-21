@@ -181,6 +181,12 @@ extension EnginesSettingsPane {
                 baseURLRaw: effectiveLLMBaseURL(),
                 apiKey: try requiredLLMAPIKey(for: .gemini)
             )
+        case .ollama, .lmStudio:
+            let models = try await EngineProbeClient.fetchOpenAIModelIDs(
+                baseURLRaw: effectiveLLMBaseURL(),
+                apiKey: ""
+            )
+            return models.isEmpty ? (Self.cloudLLMModelPresets[engine.llmEngine] ?? []) : models
         case .azureOpenAI, .localMLX:
             return []
         }
@@ -286,6 +292,13 @@ extension EnginesSettingsPane {
                 baseURLRaw: effectiveLLMBaseURL(),
                 apiKey: try requiredLLMAPIKey(for: .gemini),
                 model: model
+            )
+        case .ollama, .lmStudio:
+            return try await EngineProbeClient.runOpenAIChatProbe(
+                baseURLRaw: effectiveLLMBaseURL(),
+                apiKey: "",
+                model: model,
+                allowResponsesFallback: false
             )
         case .localMLX:
             return prefs.ui("本地模式无需 API 连接测试。", "Local mode does not require API connection testing.")
@@ -515,6 +528,9 @@ extension EnginesSettingsPane {
         case .groq:
             value = resolvedSecret(fromInput: viewModel.credentialDrafts.llmGroqKey, keychainKey: .llmGroq)
             label = "Groq LLM"
+        case .ollama, .lmStudio:
+            value = "no-key-required"
+            label = "Local"
         case .localMLX:
             value = ""
             label = "Local MLX"

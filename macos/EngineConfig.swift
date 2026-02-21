@@ -595,7 +595,7 @@ final class EngineConfig: ObservableObject {
             )?.hfRepo
             ?? fallbackLocalModel
         asrModel = storedASRModel
-        llmModel = defaults.string(forKey: Keys.llmModel) ?? "mlx-community/Qwen2.5-1.5B-Instruct-4bit"
+        llmModel = defaults.string(forKey: Keys.llmModel) ?? "mlx-community/gemma-3-270m-it-4bit"
 
         let storedCloudASRBaseURL = defaults.string(forKey: Keys.cloudASRBaseURL) ?? loadedASREngine.defaultBaseURL
         cloudASRBaseURL = storedCloudASRBaseURL

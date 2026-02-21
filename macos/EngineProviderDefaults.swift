@@ -235,6 +235,10 @@ enum EngineProviderDefaults {
                 return "builtin.llm.deepseek"
             case .groq:
                 return "builtin.llm.groq"
+            case .ollama:
+                return "builtin.llm.ollama"
+            case .lmStudio:
+                return "builtin.llm.lm-studio"
             case .localMLX:
                 return "builtin.llm.openai"
             }
@@ -354,6 +358,32 @@ enum EngineProviderDefaults {
                 defaultModel: LLMEngineOption.groq.defaultModelName,
                 authMode: .bearer,
                 apiKeyRef: APISecretKey.llmGroq.rawValue,
+                headers: [],
+                request: LLMProviderRequestConfig.openAIDefault
+            ),
+            LLMProviderProfile(
+                id: "builtin.llm.ollama",
+                type: .builtIn,
+                displayName: "Ollama",
+                engine: .ollama,
+                baseURL: LLMEngineOption.ollama.defaultBaseURL,
+                models: ["llama3.2", "llama3.1", "mistral", "gemma3", "qwen2.5", "deepseek-r1", "phi4"],
+                defaultModel: LLMEngineOption.ollama.defaultModelName,
+                authMode: .none,
+                apiKeyRef: "",
+                headers: [],
+                request: LLMProviderRequestConfig.openAIDefault
+            ),
+            LLMProviderProfile(
+                id: "builtin.llm.lm-studio",
+                type: .builtIn,
+                displayName: "LM Studio",
+                engine: .lmStudio,
+                baseURL: LLMEngineOption.lmStudio.defaultBaseURL,
+                models: ["local-model"],
+                defaultModel: LLMEngineOption.lmStudio.defaultModelName,
+                authMode: .none,
+                apiKeyRef: "",
                 headers: [],
                 request: LLMProviderRequestConfig.openAIDefault
             ),

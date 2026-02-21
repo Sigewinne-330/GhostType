@@ -5,6 +5,8 @@ import Foundation
 final class InferenceCoordinator {
     enum Timeouts {
         static let firstToken: TimeInterval = 60
+        /// Extended first-token timeout for local inference (ASR + LLM can take 20–120 s depending on model size).
+        static let firstTokenLocal: TimeInterval = 300
         static let stallAfterToken: TimeInterval = 30
         static let pasteDispatchDelay: TimeInterval = 0.08
     }
