@@ -744,16 +744,52 @@ struct EnginesSettingsPane: View {
                 .padding()
             }
             
-            // Prompt optimization toggle
+            // MARK: - Qwen3 ASR Options
+            Text(prefs.ui("转录选项", "Transcription Options"))
+                .font(.headline.weight(.semibold))
+            
+            // System prompt toggle
             Toggle(
-                prefs.ui("使用 Prompt 优化", "Use Prompt Optimization"),
-                isOn: $engine.qwen3ASRUsePrompt
+                prefs.ui("使用系统提示词", "Use System Prompt"),
+                isOn: $engine.qwen3ASRUseSystemPrompt
             )
             
+            // System prompt editor (shown when enabled)
+            if engine.qwen3ASRUseSystemPrompt {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(prefs.ui("系统提示词", "System Prompt"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    
+                    TextEditor(text: $engine.qwen3ASRSystemPrompt)
+                        .font(.body)
+                        .frame(minHeight: 80, maxHeight: 150)
+                        .padding(4)
+                        .background(Color(nsColor: .textBackgroundColor))
+                        .cornerRadius(6)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
+                        )
+                    
+                    Button(prefs.ui("恢复默认提示词", "Reset to Default")) {
+                        engine.qwen3ASRSystemPrompt = EngineConfig.defaultQwen3ASRSystemPrompt
+                    }
+                    .buttonStyle(.plain)
+                    .font(.caption)
+                    .foregroundStyle(.blue)
+                }
+            }
+            
+            // Dictionary optimization toggle
+            Toggle(
+                prefs.ui("使用词典优化", "Use Dictionary Optimization"),
+                isOn: $engine.qwen3ASRUseDictionary
+            )
             Text(
                 prefs.ui(
-                    "启用后，转录结果将使用个性化词典和写作风格进行优化。",
-                    "When enabled, transcription results will be optimized with personalization dictionary and writing style."
+                    "启用后，转录时将应用个性化词典中的术语映射。",
+                    "When enabled, transcription will apply term mappings from the personalization dictionary."
                 )
             )
             .font(.caption)

@@ -444,6 +444,10 @@ final class PythonStreamRunner: InferenceProvider {
                 "max_in_flight": state.pretranscribeMaxInFlight,
                 "fallback_policy": state.pretranscribeFallbackPolicy.rawValue,
             ],
+            // Qwen3 ASR specific options
+            "qwen3_asr_use_system_prompt": state.qwen3ASRUseSystemPrompt,
+            "qwen3_asr_use_dictionary": state.qwen3ASRUseDictionary,
+            "qwen3_asr_system_prompt": state.qwen3ASRSystemPrompt,
         ]
         switch mode {
         case .dictate:

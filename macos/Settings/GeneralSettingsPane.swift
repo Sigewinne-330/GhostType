@@ -25,15 +25,38 @@ struct GeneralSettingsPane: View {
                     LabeledContent(prefs.ui("阶段", "Stage"), value: runtime.stage.title)
                     LabeledContent(
                         prefs.ui("提供者", "Provider"),
-                        value: engine.shouldUseLocalProvider
-                            ? prefs.ui("本地 MLX", "Local MLX")
-                            : (engine.isMixedEngineSelection ? prefs.ui("混合 (本地+云端)", "Hybrid (Local + Cloud)") : prefs.ui("云端 API", "Cloud API"))
+                        value: {
+                            // 检查ASR和LLM引擎的组合状态
+                            let isASRLocal = engine.requiresLocalASR
+                            let isLLMLocal = engine.requiresLocalLLM
+                            
+                            if isASRLocal && isLLMLocal {
+                                return prefs.ui("本地 MLX", "Local MLX")
+                            } else if !isASRLocal && !isLLMLocal {
+                                return prefs.ui("云端 API", "Cloud API")
+                            } else {
+                                // 混合状态：ASR和LLM一个本地一个云端
+                                return prefs.ui("混合 (本地+云端)", "Hybrid (Local + Cloud)")
+                            }
+                        }()
                     )
                     LabeledContent(
                         prefs.ui("ASR 提供者", "ASR Provider"),
-                        value: engine.requiresLocalASR
-                            ? prefs.ui("本地 MLX", "Local MLX")
-                            : prefs.ui("云端 API", "Cloud API")
+                        value: {
+                            // 检查是否使用本地MLX引擎（包括Qwen3 ASR）
+                            if engine.requiresLocalASR {
+                                // 检查是否是Qwen3 ASR
+                                if engine.localASRProvider == .mlxQwen3ASR {
+                                    return prefs.ui("本地 MLX (Qwen3)", "Local MLX (Qwen3)")
+                                } else if engine.localASRProvider == .mlxWhisper {
+                                    return prefs.ui("本地 MLX (Whisper)", "Local MLX (Whisper)")
+                                } else {
+                                    return prefs.ui("本地 MLX", "Local MLX")
+                                }
+                            } else {
+                                return prefs.ui("云端 API", "Cloud API")
+                            }
+                        }()
                     )
                     LabeledContent(prefs.ui("后端", "Backend"), value: runtime.backendStatus)
                     LabeledContent(prefs.ui("进程", "Process"), value: runtime.processStatus)

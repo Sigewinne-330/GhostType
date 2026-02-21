@@ -4,6 +4,19 @@ import Foundation
 
 @MainActor
 final class EngineConfig: ObservableObject {
+    
+    /// Default system prompt for Qwen3 ASR
+    static let defaultQwen3ASRSystemPrompt = """
+    You are a professional speech-to-text transcription assistant. Your task is to accurately transcribe the audio content.
+    
+    Guidelines:
+    1. Transcribe the speech accurately and completely
+    2. Add appropriate punctuation based on speech patterns
+    3. Handle proper nouns and technical terms carefully
+    4. Maintain the original meaning and tone
+    5. For unclear speech, make your best guess rather than omitting content
+    """
+    
     private enum Keys {
         static let asrModel = "GhostType.asrModel"
         static let llmModel = "GhostType.llmModel"
@@ -22,6 +35,9 @@ final class EngineConfig: ObservableObject {
         static let localASRWhisperCppBinaryPath = "GhostType.localASRWhisperCppBinaryPath"
         static let localASRWhisperCppModelPath = "GhostType.localASRWhisperCppModelPath"
         static let qwen3ASRUsePrompt = "GhostType.qwen3ASRUsePrompt"
+        static let qwen3ASRUseSystemPrompt = "GhostType.qwen3ASRUseSystemPrompt"
+        static let qwen3ASRUseDictionary = "GhostType.qwen3ASRUseDictionary"
+        static let qwen3ASRSystemPrompt = "GhostType.qwen3ASRSystemPrompt"
         static let cloudASRBaseURL = "GhostType.cloudASRBaseURL"
         static let cloudASRModelName = "GhostType.cloudASRModelName"
         static let cloudASRModelCatalog = "GhostType.cloudASRModelCatalog"
@@ -145,6 +161,13 @@ final class EngineConfig: ObservableObject {
             }
             defaults.set(selectedLocalASRModelID, forKey: Keys.selectedLocalASRModelID)
             let descriptor = localASRModelDescriptor(for: normalized)
+            
+            // Auto-detect and update localASRProvider based on model ID
+            let detectedProvider = Self.detectLocalASRProvider(from: normalized)
+            if localASRProvider != detectedProvider {
+                localASRProvider = detectedProvider
+            }
+            
             if asrModel != descriptor.hfRepo {
                 asrModel = descriptor.hfRepo
             } else {
@@ -218,6 +241,27 @@ final class EngineConfig: ObservableObject {
     @Published var qwen3ASRUsePrompt: Bool {
         didSet {
             defaults.set(qwen3ASRUsePrompt, forKey: Keys.qwen3ASRUsePrompt)
+            notifyEngineConfigChanged()
+        }
+    }
+
+    @Published var qwen3ASRUseSystemPrompt: Bool {
+        didSet {
+            defaults.set(qwen3ASRUseSystemPrompt, forKey: Keys.qwen3ASRUseSystemPrompt)
+            notifyEngineConfigChanged()
+        }
+    }
+
+    @Published var qwen3ASRUseDictionary: Bool {
+        didSet {
+            defaults.set(qwen3ASRUseDictionary, forKey: Keys.qwen3ASRUseDictionary)
+            notifyEngineConfigChanged()
+        }
+    }
+
+    @Published var qwen3ASRSystemPrompt: String {
+        didSet {
+            defaults.set(qwen3ASRSystemPrompt, forKey: Keys.qwen3ASRSystemPrompt)
             notifyEngineConfigChanged()
         }
     }
@@ -561,12 +605,6 @@ final class EngineConfig: ObservableObject {
         asrEngine = loadedASREngine
         llmEngine = LLMEngineOption(rawValue: defaults.string(forKey: Keys.llmEngine) ?? "") ?? .localMLX
 
-        let storedLocalProvider = LocalASRProviderOption(
-            rawValue: defaults.string(forKey: Keys.selectedLocalASRProvider) ?? ""
-        )
-        let initialLocalASRProvider = storedLocalProvider ?? LocalASRProviderOption.from(asrEngine: loadedASREngine)
-        localASRProvider = initialLocalASRProvider
-
         let storedLocalModelID = defaults.string(forKey: Keys.selectedLocalASRModelID)
             ?? Self.legacyLocalASRModelID(from: defaults.string(forKey: Keys.localASRModel))
             ?? defaults.string(forKey: Keys.asrModel)
@@ -574,6 +612,15 @@ final class EngineConfig: ObservableObject {
         let initialSelectedLocalASRModelID = LocalASRModelCatalog.normalizeModelID(
             storedLocalModelID ?? fallbackLocalModel
         )
+        
+        // Detect provider from model ID first, then fall back to stored or inferred
+        let detectedProvider = Self.detectLocalASRProvider(from: initialSelectedLocalASRModelID)
+        let storedLocalProvider = LocalASRProviderOption(
+            rawValue: defaults.string(forKey: Keys.selectedLocalASRProvider) ?? ""
+        )
+        let initialLocalASRProvider = detectedProvider != .mlxWhisper ? detectedProvider : (storedLocalProvider ?? LocalASRProviderOption.from(asrEngine: loadedASREngine))
+        localASRProvider = initialLocalASRProvider
+
         selectedLocalASRModelID = initialSelectedLocalASRModelID
         localASRShowAdvancedModels = defaults.object(forKey: Keys.localASRShowAdvancedModels) as? Bool ?? false
         localLLMShowAdvancedQuantization = defaults.object(forKey: Keys.localLLMShowAdvancedQuantization) as? Bool ?? false
@@ -587,6 +634,9 @@ final class EngineConfig: ObservableObject {
         localASRWhisperCppBinaryPath = defaults.string(forKey: Keys.localASRWhisperCppBinaryPath) ?? ""
         localASRWhisperCppModelPath = defaults.string(forKey: Keys.localASRWhisperCppModelPath) ?? ""
         qwen3ASRUsePrompt = defaults.object(forKey: Keys.qwen3ASRUsePrompt) as? Bool ?? false
+        qwen3ASRUseSystemPrompt = defaults.object(forKey: Keys.qwen3ASRUseSystemPrompt) as? Bool ?? false
+        qwen3ASRUseDictionary = defaults.object(forKey: Keys.qwen3ASRUseDictionary) as? Bool ?? true
+        qwen3ASRSystemPrompt = defaults.string(forKey: Keys.qwen3ASRSystemPrompt) ?? Self.defaultQwen3ASRSystemPrompt
 
         let storedASRModel = defaults.string(forKey: Keys.asrModel)
             ?? LocalASRModelCatalog.descriptor(
@@ -697,6 +747,24 @@ final class EngineConfig: ObservableObject {
             return descriptor
         }
         return LocalASRModelCatalog.fallbackDescriptor(in: localASRModelCatalog)
+    }
+    
+    /// Detect the appropriate LocalASRProviderOption based on the model ID
+    private static func detectLocalASRProvider(from modelID: String) -> LocalASRProviderOption {
+        let normalizedID = modelID.lowercased()
+        
+        // Check for Qwen3 ASR models
+        if normalizedID.contains("qwen3-asr") || normalizedID.contains("qwen3_asr") {
+            return .mlxQwen3ASR
+        }
+        
+        // Check for standard MLX Whisper models
+        if normalizedID.contains("whisper") && (normalizedID.contains("mlx-community") || normalizedID.contains("-mlx")) {
+            return .mlxWhisper
+        }
+        
+        // For other cases, return mlxWhisper as default local provider
+        return .mlxWhisper
     }
 
     func refreshLocalASRModelCatalog() async {
